@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Portal — Business Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080808;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #1e1e1e;
+    --pink: #ff2d7e;
+    --pink-dim: rgba(255,45,126,0.10);
+    --pink-glow: rgba(255,45,126,0.25);
+    --text: #f0f0f0;
+    --muted: #666;
+    --font: 'Space Grotesk', sans-serif;
+    --mono: 'Space Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,45,126,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,45,126,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 4rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* HEADER */
+  .portal-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .brand {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--pink);
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+  }
+
+  .client-hero {
+    margin-bottom: 0.5rem;
+  }
+
+  .client-greeting {
+    font-size: clamp(28px, 5vw, 42px);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .client-empresa {
+    font-size: 14px;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: var(--mono);
+    letter-spacing: 0.1em;
+  }
+
+  .session-tag {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 5px 14px;
+    border-radius: 20px;
+    background: var(--pink-dim);
+    border: 1px solid var(--pink-glow);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--pink);
+    letter-spacing: 0.1em;
+  }
+
+  /* DIVIDER */
+  .line {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--pink-glow), transparent);
+    margin: 2rem 0;
+  }
+
+  /* SECTION */
+  .section { margin-bottom: 2.5rem; }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: var(--pink);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .proposito-text {
+    font-size: 16px;
+    line-height: 1.7;
+    color: var(--text);
+    padding: 1.25rem 1.5rem;
+    background: var(--surface);
+    border-radius: 10px;
+    border-left: 2px solid var(--pink);
+  }
+
+  /* ACCIONES */
+  .acciones-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .accion {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    transition: all 0.25s;
+    cursor: pointer;
+  }
+
+  .accion:hover { border-color: var(--pink-glow); }
+  .accion.done { opacity: 0.5; }
+  .accion.done .accion-titulo { text-decoration: line-through; }
+
+  .accion-check {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+    transition: all 0.2s;
+    font-size: 12px;
+  }
+
+  .accion.done .accion-check {
+    background: var(--pink);
+    border-color: var(--pink);
+    color: white;
+  }
+
+  .accion-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--pink);
+    font-weight: 700;
+    min-width: 20px;
+    padding-top: 3px;
+  }
+
+  .accion-body { flex: 1; }
+
+  .accion-titulo {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+
+  .accion-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
+  /* HALLAZGOS */
+  .hallazgo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 8px;
+    border-left: 2px solid var(--pink-glow);
+    transition: border-color 0.2s;
+  }
+
+  .hallazgo-card:hover { border-left-color: var(--pink); }
+
+  .hallazgo-titulo {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 5px;
+  }
+
+  .hallazgo-body {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .area-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  /* NEXT STEPS */
+  .next-box {
+    background: var(--pink-dim);
+    border: 1px solid var(--pink-glow);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  /* PROGRESS RING */
+  .progress-summary {
+    text-align: center;
+    margin: 1.5rem 0;
+  }
+
+  .progress-ring-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 40px;
+    padding: 12px 24px;
+  }
+
+  .ring-label { font-size: 13px; color: var(--muted); }
+  .ring-count { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--pink); }
+  .ring-total { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+  /* FOOTER */
+  .portal-footer {
+    text-align: center;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .footer-brand {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ANIMATIONS */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-in { animation: fadeUp 0.5s ease forwards; }
+  .fade-in:nth-child(2) { animation-delay: 0.1s; opacity: 0; }
+  .fade-in:nth-child(3) { animation-delay: 0.2s; opacity: 0; }
+  .fade-in:nth-child(4) { animation-delay: 0.3s; opacity: 0; }
+  .fade-in:nth-child(5) { animation-delay: 0.4s; opacity: 0; }
+
+  /* NOT FOUND */
+  .not-found {
+    text-align: center;
+    padding: 4rem 2rem;
+  }
+
+  .not-found-icon { font-size: 48px; margin-bottom: 1rem; }
+  .not-found-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .not-found-sub { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container" id="main">
+  <div style="text-align:center;padding:4rem 0;color:#444;font-family:monospace">Cargando...</div>
+</div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const id = params.get('id');
+const data = id ? JSON.parse(localStorage.getItem('bt_portal_' + id) || 'null') : null;
+
+const main = document.getElementById('main');
+
+if (!data) {
+  main.innerHTML = `
+    <div class="not-found">
+      <div class="not-found-icon">◎</div>
+      <div class="not-found-title">Portal no encontrado</div>
+      <div class="not-found-sub">Este link no está disponible o ha expirado.</div>
+    </div>
+  `;
+} else {
+  const checkedKey = 'bt_checked_' + id;
+  let checked = JSON.parse(localStorage.getItem(checkedKey) || '[]');
+
+  function toggleAccion(i) {
+    if (checked.includes(i)) {
+      checked = checked.filter(x => x !== i);
+    } else {
+      checked.push(i);
+    }
+    localStorage.setItem(checkedKey, JSON.stringify(checked));
+    render();
+  }
+
+  function render() {
+    const done = checked.length;
+    const total = data.acciones.length;
+    const m = data.meta;
+
+    main.innerHTML = `
+      <div class="portal-header fade-in">
+        <div class="brand">Business Trainer · Portal del Cliente</div>
+        <div class="client-hero">
+          <div class="client-greeting">Hola, ${m.cliente || 'Cliente'} 👋</div>
+          <div class="client-empresa">${m.empresa}</div>
+        </div>
+        <div class="session-tag">Sesión ${m.sesion} · ${formatDate(m.fecha)}</div>
+      </div>
+
+      <div class="line fade-in"></div>
+
+      <div class="section fade-in">
+        <div class="section-label">Propósito de la sesión</div>
+        <div class="proposito-text">${data.proposito}</div>
+      </div>
+
+      <div class="section fade-in">
+        <div class="section-label">Acciones acordadas</div>
+        <div class="progress-summary">
+          <div class="progress-ring-wrap">
+            <span class="ring-label">Completadas</span>
+            <span class="ring-count">${done}</span>
+            <span class="ring-total">/ ${total}</span>
+          </div>
+        </div>
+        <div class="acciones-list">
+          ${data.acciones.map((a, i) => `
+            <div class="accion ${checked.includes(i) ? 'done' : ''}" onclick="toggleAccion(${i})">
+              <div class="accion-check">${checked.includes(i) ? '✓' : ''}</div>
+              <div class="accion-num">0${i+1}</div>
+              <div class="accion-body">
+                <div class="accion-titulo">${a.titulo}</div>
+                ${a.descripcion ? `<div class="accion-desc">${a.descripcion}</div>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="section fade-in">
+        <div class="section-label">Hallazgos de la sesión</div>
+        ${data.hallazgos.map(area => `
+          <div class="area-title">${area.area}</div>
+          ${area.items.map(item => `
+            <div class="hallazgo-card">
+              <div class="hallazgo-titulo">${item.titulo}</div>
+              <div class="hallazgo-body">${item.cuerpo}</div>
+            </div>
+          `).join('')}
+        `).join('')}
+      </div>
+
+      <div class="section fade-in">
+        <div class="section-label">Next steps</div>
+        <div class="next-box">${data.nextSteps}</div>
+      </div>
+
+      <div class="portal-footer fade-in">
+        <div class="footer-brand">Business Trainer · ${m.empresa} · ${formatDate(m.fecha)}</div>
+      </div>
+    `;
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch { return dateStr; }
+  }
+
+  render();
+}
+</script>
+</body>
+</html>
+EOF
