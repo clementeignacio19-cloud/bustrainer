@@ -5,24 +5,33 @@ de Drive** para las fotos de los QR escaneados. El backend es un Google
 Apps Script gratuito, sin necesidad de tarjeta de crédito ni cuentas
 técnicas nuevas.
 
-## 1. Crear la Google Sheet
+## 1. Google Sheet (ya creada ✅)
 
-1. Ve a [sheets.google.com](https://sheets.google.com) y crea una hoja nueva.
-   Ponle un nombre, por ejemplo **"Eventos QR — Maestro"**.
-2. No hace falta crear pestañas ni columnas a mano — el script las crea solo
-   la primera vez que alguien registra un asistente (`Maestro`, `Eventos`, y
-   una pestaña por cada evento).
+Ya está creada en tu Drive (clementeignacio19@gmail.com):
 
-## 2. Crear la carpeta de Drive para las fotos
+- **"Eventos QR — Maestro"** → https://docs.google.com/spreadsheets/d/1Sb8KZi840krYImiRxeO554N23VuRbFycvOhb2vFhaGY/edit
+- ID: `1Sb8KZi840krYImiRxeO554N23VuRbFycvOhb2vFhaGY`
 
-1. Ve a [drive.google.com](https://drive.google.com) y crea una carpeta,
-   por ejemplo **"Eventos QR — Fotos"**.
-2. Ábrela y copia el ID desde la URL:
-   `https://drive.google.com/drive/folders/`**`ESTE_ES_EL_ID`**
+No hace falta crear pestañas ni columnas a mano — el script las crea solo
+la primera vez que alguien registra un asistente (`Maestro`, `Eventos`, y
+una pestaña por cada evento).
+
+## 2. Carpeta de Drive para las fotos (ya creada ✅)
+
+También ya está creada:
+
+- **"Eventos QR — Fotos"** → https://drive.google.com/drive/folders/1cR8lErr3tjeurW2evH61YdeEWRnzaGTW
+- ID: `1cR8lErr3tjeurW2evH61YdeEWRnzaGTW`
+
+Guarda este ID — lo vas a pegar en el paso 4 (`DRIVE_FOLDER_ID`).
 
 ## 3. Crear el Apps Script (atado a la Sheet)
 
-1. Abre la Sheet del paso 1.
+Este paso sí lo tienes que hacer tú manualmente: no existe una API pública
+para crear y desplegar un Apps Script desde afuera, así que no puedo
+automatizarlo. Son ~3 minutos:
+
+1. Abre la Sheet del paso 1 (el link de arriba).
 2. Ve a **Extensiones → Apps Script**.
 3. Borra el contenido del archivo `Code.gs` que se abre y pega el contenido
    completo de [`Code.gs`](./Code.gs) de esta carpeta.
@@ -35,7 +44,7 @@ técnicas nuevas.
 2. Baja hasta **Propiedades del script** → **Añadir propiedad del script**.
 3. Agrega estas dos:
    - `EVENT_PIN` → la clave que van a usar las personas que escaneen (ej. `2026`).
-   - `DRIVE_FOLDER_ID` → el ID de la carpeta de Drive del paso 2.
+   - `DRIVE_FOLDER_ID` → `1cR8lErr3tjeurW2evH61YdeEWRnzaGTW` (la carpeta ya creada del paso 2).
 4. Guarda.
 
 ## 5. Publicar como Web App
@@ -72,6 +81,23 @@ técnicas nuevas.
    capturada — revisa y confirma.
 5. Verifica en la Sheet que apareció la fila en la pestaña `Maestro` y en la
    pestaña del evento, y que la foto quedó en la carpeta de Drive.
+
+## 7.b Instalarla como app en el celular (gratis, sin tienda de apps)
+
+`eventos.html` ya está preparado como PWA (Progressive Web App): tiene
+manifest e ícono propios, así que se puede "instalar" desde el navegador y
+queda como un ícono más en la pantalla de inicio, abriendo directo al
+escáner — sin pasar por Play Store / App Store ni pagar nada.
+
+- **Android (Chrome):** abre `/eventos`, toca el menú (⋮) → **"Instalar
+  app"** (o aparece un banner automático abajo). Queda con el ícono "QR"
+  en la pantalla de inicio y abre en modo app, sin barra del navegador.
+- **iPhone (Safari):** abre `/eventos`, toca el botón de compartir (□↑) →
+  **"Añadir a pantalla de inicio"**.
+
+Cada persona del equipo que vaya a escanear hace esto una sola vez en su
+propio celular; todas comparten el mismo backend (Sheet + Drive) a través
+del PIN.
 
 ## 8. (Opcional) Cruzar con la lista de inscritos previos
 
@@ -132,3 +158,9 @@ autoidentificado, sin que el operador tenga que volver a preguntarlos.
   varios cientos de escaneos por minuto en simultáneo, conviene migrar a
   un backend con base de datos real (Firebase/Supabase) — se puede hacer
   después sin rehacer el frontend de la cámara.
+- **Costo total: $0.** Google Sheets, Drive, Apps Script y el hosting en
+  Vercel (plan gratuito) no cobran nada para este uso — mientras no superes
+  los límites gratuitos de cada uno (Drive: 15 GB compartidos con tu Gmail;
+  Apps Script: cuota diaria de ejecuciones, de sobra para un evento). No
+  hay tarjeta de crédito ni suscripción de por medio en ningún punto de
+  este flujo, incluyendo instalar la app en los celulares del equipo.
