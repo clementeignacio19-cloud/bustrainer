@@ -1,6 +1,6 @@
 {
-  "name": "Eventos QR — Business Trainer",
-  "short_name": "Eventos QR",
+  "name": "QR Scanner — Fundación Bienestar Mayor",
+  "short_name": "QR Scanner",
   "description": "Escáner de QR de carnet para registro de asistentes a eventos",
   "start_url": "/eventos",
   "scope": "/",
