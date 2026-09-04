@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#080808">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="QR Scanner FBM">
+<title>QR Scanner — Fundación Bienestar Mayor</title>
+<link rel="manifest" href="manifest_eventos.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%23080808'/><text y='120' x='96' text-anchor='middle' font-size='80' font-family='monospace' fill='%23ff2d7e'>QR</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #080808;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #222222;
+    --pink: #ff2d7e;
+    --pink-dim: rgba(255,45,126,0.12);
+    --pink-glow: rgba(255,45,126,0.3);
+    --green: #2dff9c;
+    --amber: #ffb92d;
+    --text: #f0f0f0;
+    --muted: #777;
+    --font: 'Space Grotesk', sans-serif;
+    --mono: 'Space Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .screen { display: none; min-height: 100vh; flex-direction: column; padding: 1.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom)); }
+  .screen.active { display: flex; }
+
+  .brand { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--pink); text-transform: uppercase; text-align: center; margin-bottom: 2rem; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 0.5rem; }
+  p.sub { color: var(--muted); font-size: 14px; line-height: 1.5; margin-bottom: 1.5rem; }
+
+  label { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 0.15em; color: var(--pink); text-transform: uppercase; margin-bottom: 6px; }
+  input, select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-size: 16px;
+    font-family: var(--font);
+    margin-bottom: 1.1rem;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--pink-glow); }
+
+  button { font-family: var(--font); font-size: 15px; font-weight: 600; border: none; border-radius: 12px; padding: 15px; cursor: pointer; width: 100%; }
+  .btn-primary { background: var(--pink); color: #fff; }
+  .btn-primary:disabled { opacity: 0.4; }
+  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); margin-top: 10px; }
+  .btn-ghost { background: transparent; color: var(--muted); font-size: 13px; padding: 10px; }
+
+  .error-box { background: rgba(255,60,60,0.1); border: 1px solid rgba(255,60,60,0.35); color: #ff8a8a; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 1rem; display: none; }
+  .error-box.show { display: block; }
+
+  .center-flex { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+  /* Eventos list */
+  .evento-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+  .evento-card:active { border-color: var(--pink-glow); }
+  .evento-nombre { font-weight: 600; font-size: 15px; }
+  .evento-fecha { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .evento-count { font-family: var(--mono); font-size: 13px; color: var(--pink); }
+
+  .divider-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; color: var(--muted); text-transform: uppercase; text-align: center; margin: 1.5rem 0 1rem; display: flex; align-items: center; gap: 10px; }
+  .divider-label::before, .divider-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* Scanner */
+  .scan-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+  .scan-evento { font-weight: 600; font-size: 16px; }
+  .scan-fecha { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .scan-counter { font-family: var(--mono); font-size: 22px; color: var(--pink); font-weight: 700; text-align: right; }
+  .scan-counter-label { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: right; text-transform: uppercase; letter-spacing: 0.15em; }
+
+  #reader { width: 100%; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid var(--border); }
+  #reader video { border-radius: 16px; }
+
+  .pending-badge { font-family: var(--mono); font-size: 11px; color: var(--amber); text-align: center; margin-top: 10px; display: none; }
+  .pending-badge.show { display: block; }
+
+  /* Confirm card (overlay) */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: flex-end; justify-content: center; z-index: 50; }
+  .overlay.show { display: flex; }
+  .confirm-sheet {
+    background: var(--surface);
+    border-radius: 20px 20px 0 0;
+    padding: 1.5rem 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+    width: 100%;
+    max-width: 480px;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+  .confirm-photo { width: 100%; max-height: 160px; object-fit: cover; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border); }
+  .confirm-title { font-size: 16px; font-weight: 600; margin-bottom: 1rem; }
+  .parse-warning { background: rgba(255,185,45,0.1); border: 1px solid rgba(255,185,45,0.35); color: var(--amber); border-radius: 10px; padding: 10px 14px; font-size: 12px; margin-bottom: 1rem; }
+  .field-row { display: flex; gap: 10px; }
+  .field-row > div { flex: 1; }
+
+  .toast { position: fixed; top: calc(1rem + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--pink-glow); color: var(--text); padding: 10px 18px; border-radius: 30px; font-size: 13px; z-index: 100; opacity: 0; transition: opacity 0.25s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.success { border-color: rgba(45,255,156,0.5); color: var(--green); }
+  .toast.warn { border-color: rgba(255,185,45,0.5); color: var(--amber); }
+
+  .footer-link { text-align: center; margin-top: 1.5rem; }
+  .footer-link a { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast"></div>
+
+<!-- PANTALLA 1: PIN -->
+<div class="screen active" id="screen-pin">
+  <div class="center-flex">
+    <div class="brand">Fundación Bienestar Mayor · QR Scanner</div>
+    <h1>Acceso al escáner</h1>
+    <p class="sub">Ingresa la clave del evento para poder escanear carnets.</p>
+    <div class="error-box" id="pin-error"></div>
+    <label>Clave / PIN</label>
+    <input type="password" inputmode="numeric" id="pin-input" placeholder="••••">
+    <button class="btn-primary" id="pin-submit">Ingresar</button>
+  </div>
+</div>
+
+<!-- PANTALLA 2: SELECCIÓN / CREACIÓN DE EVENTO -->
+<div class="screen" id="screen-evento">
+  <div class="brand">Fundación Bienestar Mayor · QR Scanner</div>
+  <h1>¿Qué evento vas a registrar?</h1>
+  <p class="sub">Crea uno nuevo o continúa uno que ya está en curso.</p>
+
+  <label>Nombre del evento</label>
+  <input type="text" id="evento-nombre" placeholder="Ej: Charla Liderazgo Ágil">
+  <label>Fecha</label>
+  <input type="date" id="evento-fecha">
+  <button class="btn-primary" id="evento-crear">Crear / continuar y escanear</button>
+
+  <div id="eventos-existentes-wrap">
+    <div class="divider-label">Eventos recientes</div>
+    <div id="eventos-lista"></div>
+  </div>
+
+  <div class="footer-link"><a href="#" id="cerrar-sesion">Cerrar sesión / cambiar clave</a></div>
+</div>
+
+<!-- PANTALLA 3: ESCÁNER -->
+<div class="screen" id="screen-scan">
+  <div class="scan-header">
+    <div>
+      <div class="scan-evento" id="scan-evento-nombre"></div>
+      <div class="scan-fecha" id="scan-evento-fecha"></div>
+    </div>
+    <div>
+      <div class="scan-counter" id="scan-counter">0</div>
+      <div class="scan-counter-label">Registrados</div>
+    </div>
+  </div>
+
+  <div id="reader"></div>
+  <p class="sub" style="margin-top:1rem;text-align:center">Apunta la cámara al código QR del carnet.</p>
+  <div class="pending-badge" id="pending-badge"></div>
+
+  <button class="btn-secondary" id="scan-cambiar-evento">Cambiar de evento</button>
+</div>
+
+<!-- OVERLAY: CONFIRMAR DATOS -->
+<div class="overlay" id="overlay-confirm">
+  <div class="confirm-sheet">
+    <img class="confirm-photo" id="confirm-photo" src="" alt="Foto QR">
+    <div class="confirm-title">Confirmar datos</div>
+    <div class="parse-warning" id="parse-warning" style="display:none">No se pudo leer el QR con el formato esperado. Revisa y completa los datos manualmente antes de guardar.</div>
+
+    <label>RUN</label>
+    <input type="text" id="c-run">
+    <div class="field-row">
+      <div><label>Apellido paterno</label><input type="text" id="c-apellido-paterno"></div>
+      <div><label>Apellido materno</label><input type="text" id="c-apellido-materno"></div>
+    </div>
+    <label>Nombres</label>
+    <input type="text" id="c-nombres">
+    <div class="field-row">
+      <div><label>Sexo</label>
+        <select id="c-sexo">
+          <option value="">—</option>
+          <option value="Masculino">Masculino</option>
+          <option value="Femenino">Femenino</option>
+        </select>
+      </div>
+      <div><label>Fecha nacimiento</label><input type="date" id="c-fecha-nacimiento"></div>
+    </div>
+
+    <button class="btn-primary" id="confirm-guardar">Confirmar y guardar</button>
+    <button class="btn-secondary" id="confirm-descartar">Descartar y volver a escanear</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONFIGURACIÓN — pega aquí la URL del Web App de Apps Script
+// (ver apps-script/README.md para cómo obtenerla)
+// ════════════════════════════════════════════════════════════
+const APPS_SCRIPT_URL = "PEGA_AQUI_TU_URL_DE_APPS_SCRIPT";
+
+const LS_PIN = 'eventosqr_pin';
+const LS_EVENTO = 'eventosqr_evento_actual';
+const LS_PENDING = 'eventosqr_pending';
+
+let state = {
+  pin: localStorage.getItem(LS_PIN) || '',
+  evento: JSON.parse(localStorage.getItem(LS_EVENTO) || 'null'),
+  eventos: [],
+  count: 0
+};
+
+const $ = (id) => document.getElementById(id);
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(id).classList.add('active');
+}
+
+function toast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (kind ? ' ' + kind : '');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function checkConfigured() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PEGA_AQUI') === 0) {
+    document.body.innerHTML = '<div style="padding:3rem 1.5rem;font-family:sans-serif;color:#f0f0f0;background:#080808;min-height:100vh">' +
+      '<h2 style="color:#ff2d7e">Falta configurar la app</h2>' +
+      '<p style="margin-top:1rem;line-height:1.6">Todavía no pegaste la URL del Web App de Apps Script en <code>eventos.html</code> (constante <code>APPS_SCRIPT_URL</code>). Sigue la guía en <code>apps-script/README.md</code>.</p></div>';
+    return false;
+  }
+  return true;
+}
+
+// ── Llamadas al backend ──
+async function apiGet(action, extra) {
+  const params = new URLSearchParams({ action, pin: state.pin, ...extra });
+  const res = await fetch(APPS_SCRIPT_URL + '?' + params.toString());
+  return res.json();
+}
+
+async function apiPost(payload) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // evita preflight CORS
+    body: JSON.stringify({ ...payload, pin: state.pin })
+  });
+  return res.json();
+}
+
+// ── Cola de reintentos offline ──
+function getPending() { return JSON.parse(localStorage.getItem(LS_PENDING) || '[]'); }
+function setPending(arr) { localStorage.setItem(LS_PENDING, JSON.stringify(arr)); renderPendingBadge(); }
+function renderPendingBadge() {
+  const n = getPending().length;
+  const badge = $('pending-badge');
+  if (n > 0) { badge.textContent = n + ' registro(s) pendiente(s) de subir — reintentando...'; badge.classList.add('show'); }
+  else { badge.classList.remove('show'); }
+}
+async function flushPending() {
+  const pending = getPending();
+  if (!pending.length) return;
+  const remaining = [];
+  for (const item of pending) {
+    try {
+      const r = await apiPost(item);
+      if (!r.ok) remaining.push(item);
+    } catch (e) { remaining.push(item); }
+  }
+  setPending(remaining);
+  if (remaining.length < pending.length) toast('Registros pendientes sincronizados', 'success');
+}
+window.addEventListener('online', flushPending);
+setInterval(flushPending, 15000);
+
+// ── PANTALLA PIN ──
+$('pin-submit').addEventListener('click', async () => {
+  const pin = $('pin-input').value.trim();
+  if (!pin) return;
+  state.pin = pin;
+  $('pin-error').classList.remove('show');
+  $('pin-submit').disabled = true;
+  $('pin-submit').textContent = 'Verificando...';
+  try {
+    const r = await apiGet('init');
+    if (!r.ok) throw new Error(r.error || 'pin_invalido');
+    localStorage.setItem(LS_PIN, pin);
+    state.eventos = r.eventos || [];
+    goToEventoScreen();
+  } catch (err) {
+    $('pin-error').textContent = 'Clave incorrecta o sin conexión con el servidor.';
+    $('pin-error').classList.add('show');
+  } finally {
+    $('pin-submit').disabled = false;
+    $('pin-submit').textContent = 'Ingresar';
+  }
+});
+
+$('cerrar-sesion').addEventListener('click', (e) => {
+  e.preventDefault();
+  localStorage.removeItem(LS_PIN);
+  localStorage.removeItem(LS_EVENTO);
+  state.pin = ''; state.evento = null;
+  $('pin-input').value = '';
+  showScreen('screen-pin');
+});
+
+// ── PANTALLA EVENTO ──
+function goToEventoScreen() {
+  $('evento-fecha').value = todayStr();
+  renderEventosLista();
+  showScreen('screen-evento');
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function renderEventosLista() {
+  const wrap = $('eventos-lista');
+  if (!state.eventos.length) {
+    $('eventos-existentes-wrap').style.display = 'none';
+    return;
+  }
+  $('eventos-existentes-wrap').style.display = 'block';
+  wrap.innerHTML = state.eventos.map((ev, i) => `
+    <div class="evento-card" data-i="${i}">
+      <div>
+        <div class="evento-nombre">${escapeHtml(ev.nombre)}</div>
+        <div class="evento-fecha">${ev.fecha}</div>
+      </div>
+      <div class="evento-count">${ev.asistentes || 0}</div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.evento-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const ev = state.eventos[card.dataset.i];
+      selectEvento(ev.nombre, ev.fecha, ev.asistentes || 0);
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+$('evento-crear').addEventListener('click', () => {
+  const nombre = $('evento-nombre').value.trim();
+  const fecha = $('evento-fecha').value;
+  if (!nombre || !fecha) { toast('Completa el nombre y la fecha del evento', 'warn'); return; }
+  selectEvento(nombre, fecha, 0);
+});
+
+function selectEvento(nombre, fecha, count) {
+  state.evento = { nombre, fecha };
+  state.count = count;
+  localStorage.setItem(LS_EVENTO, JSON.stringify(state.evento));
+  $('scan-evento-nombre').textContent = nombre;
+  $('scan-evento-fecha').textContent = formatFechaLarga(fecha);
+  $('scan-counter').textContent = count;
+  showScreen('screen-scan');
+  startScanner();
+}
+
+function formatFechaLarga(fechaStr) {
+  try {
+    return new Date(fechaStr + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' });
+  } catch (e) { return fechaStr; }
+}
+
+$('scan-cambiar-evento').addEventListener('click', () => {
+  stopScanner();
+  goToEventoScreen();
+});
+
+// ── ESCÁNER ──
+let html5QrCode = null;
+let scanning = false;
+
+function startScanner() {
+  if (!html5QrCode) html5QrCode = new Html5Qrcode('reader');
+  scanning = true;
+  html5QrCode.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 260, height: 260 } },
+    onScanSuccess,
+    () => {}
+  ).catch(err => {
+    toast('No se pudo abrir la cámara: revisa los permisos', 'warn');
+  });
+}
+
+function stopScanner() {
+  if (html5QrCode && scanning) {
+    html5QrCode.stop().catch(() => {});
+    scanning = false;
+  }
+}
+
+function onScanSuccess(decodedText) {
+  if (!scanning) return;
+  scanning = false;
+  html5QrCode.pause(true);
+  const foto = capturarFoto();
+  const parsed = parseCedulaChilena(decodedText);
+  abrirConfirmacion(parsed, foto);
+}
+
+function capturarFoto() {
+  try {
+    const video = document.querySelector('#reader video');
+    if (!video || !video.videoWidth) return '';
+    const maxW = 640;
+    const scale = Math.min(1, maxW / video.videoWidth);
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.7);
+  } catch (e) { return ''; }
+}
+
+// ── Parser del QR de la cédula chilena ──
+// Orden estándar (2013+): RUN;Paterno;Materno;Nombres;Nacionalidad;
+// FechaNacimiento(DDMMYYYY);Sexo;FechaEmision;NumDocumento
+// Si en la práctica el orden real viene distinto, ajusta los índices abajo.
+function parseCedulaChilena(raw) {
+  const parts = raw.split(';').map(s => s.trim()).filter(s => s.length);
+  const result = {
+    run: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
+    nacionalidad: '', fechaNacimiento: '', sexo: '', qrRaw: raw, parseOk: false
+  };
+  if (parts.length >= 7) {
+    result.run = normalizeRun(parts[0]);
+    result.apellidoPaterno = parts[1] || '';
+    result.apellidoMaterno = parts[2] || '';
+    result.nombres = parts[3] || '';
+    result.nacionalidad = parts[4] || '';
+    result.fechaNacimiento = normalizeFechaDDMMYYYY(parts[5]);
+    result.sexo = normalizeSexo(parts[6]);
+    result.parseOk = !!(result.run && result.nombres);
+  }
+  return result;
+}
+
+function normalizeRun(run) {
+  if (!run) return '';
+  let r = run.replace(/\./g, '').trim().toUpperCase();
+  if (!r.includes('-') && r.length > 1) r = r.slice(0, -1) + '-' + r.slice(-1);
+  return r;
+}
+
+function normalizeFechaDDMMYYYY(s) {
+  if (!s) return '';
+  const m = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  const m2 = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (m2) return `${m2[3]}-${m2[2]}-${m2[1]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  return '';
+}
+
+function normalizeSexo(s) {
+  if (!s) return '';
+  const c = s.trim().toUpperCase()[0];
+  if (c === 'M') return 'Masculino';
+  if (c === 'F') return 'Femenino';
+  return '';
+}
+
+// ── OVERLAY DE CONFIRMACIÓN ──
+let pendingParsed = null;
+
+function abrirConfirmacion(parsed, fotoDataUrl) {
+  pendingParsed = { ...parsed, foto: fotoDataUrl };
+  $('confirm-photo').src = fotoDataUrl || '';
+  $('confirm-photo').style.display = fotoDataUrl ? 'block' : 'none';
+  $('parse-warning').style.display = parsed.parseOk ? 'none' : 'block';
+  $('c-run').value = parsed.run;
+  $('c-apellido-paterno').value = parsed.apellidoPaterno;
+  $('c-apellido-materno').value = parsed.apellidoMaterno;
+  $('c-nombres').value = parsed.nombres;
+  $('c-sexo').value = parsed.sexo;
+  $('c-fecha-nacimiento').value = parsed.fechaNacimiento;
+  $('overlay-confirm').classList.add('show');
+}
+
+function cerrarConfirmacionYReanudar() {
+  $('overlay-confirm').classList.remove('show');
+  pendingParsed = null;
+  scanning = true;
+  if (html5QrCode) html5QrCode.resume();
+}
+
+$('confirm-descartar').addEventListener('click', cerrarConfirmacionYReanudar);
+
+$('confirm-guardar').addEventListener('click', async () => {
+  const payload = {
+    evento: state.evento.nombre,
+    fechaEvento: state.evento.fecha,
+    run: $('c-run').value.trim(),
+    apellidoPaterno: $('c-apellido-paterno').value.trim(),
+    apellidoMaterno: $('c-apellido-materno').value.trim(),
+    nombres: $('c-nombres').value.trim(),
+    sexo: $('c-sexo').value,
+    fechaNacimiento: $('c-fecha-nacimiento').value,
+    nacionalidad: pendingParsed ? pendingParsed.nacionalidad : '',
+    qrRaw: pendingParsed ? pendingParsed.qrRaw : '',
+    fotoBase64: pendingParsed ? pendingParsed.foto : ''
+  };
+
+  $('confirm-guardar').disabled = true;
+  $('confirm-guardar').textContent = 'Guardando...';
+
+  try {
+    const r = await apiPost(payload);
+    if (r.ok && r.duplicate) {
+      toast('Esta persona ya estaba registrada en este evento', 'warn');
+      state.count = r.count;
+    } else if (r.ok) {
+      const matchMsg = r.inscritoPrevio ? ' · inscrito previamente ✓' : ' · no estaba en la lista de inscritos';
+      toast('Registrado correctamente' + matchMsg, r.inscritoPrevio ? 'success' : 'warn');
+      state.count = r.count;
+    } else {
+      throw new Error(r.error || 'error_desconocido');
+    }
+    $('scan-counter').textContent = state.count;
+  } catch (err) {
+    const pending = getPending();
+    pending.push(payload);
+    setPending(pending);
+    toast('Sin conexión: se guardó localmente y se reintentará', 'warn');
+  } finally {
+    $('confirm-guardar').disabled = false;
+    $('confirm-guardar').textContent = 'Confirmar y guardar';
+    cerrarConfirmacionYReanudar();
+  }
+});
+
+// ── PWA: registrar service worker (habilita "Instalar app") ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw-eventos.js').catch(() => {});
+  });
+}
+
+// ── INICIO ──
+(async function init() {
+  if (!checkConfigured()) return;
+  renderPendingBadge();
+  if (state.pin) {
+    try {
+      const r = await apiGet('init');
+      if (r.ok) {
+        state.eventos = r.eventos || [];
+        if (state.evento) {
+          const found = state.eventos.find(e => e.nombre === state.evento.nombre && e.fecha === state.evento.fecha);
+          selectEvento(state.evento.nombre, state.evento.fecha, found ? found.asistentes : 0);
+          return;
+        }
+        goToEventoScreen();
+        return;
+      }
+    } catch (e) { /* sigue a pantalla de PIN */ }
+  }
+  showScreen('screen-pin');
+})();
+</script>
+</body>
+</html>
