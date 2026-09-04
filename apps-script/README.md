@@ -73,6 +73,40 @@ técnicas nuevas.
 5. Verifica en la Sheet que apareció la fila en la pestaña `Maestro` y en la
    pestaña del evento, y que la foto quedó en la carpeta de Drive.
 
+## 8. (Opcional) Cruzar con la lista de inscritos previos
+
+Si el evento ya tuvo un **Formulario de inscripción** previo (Google Forms
+con los campos nombre, edad, género, correo, teléfono, RUT, comuna, etc.),
+puedes cargar esas respuestas en la misma Sheet para que la app QR las
+cruce automáticamente por RUT al hacer el check-in — así el registro final
+queda enriquecido con correo, teléfono, comuna, región, ocupación y género
+autoidentificado, sin que el operador tenga que volver a preguntarlos.
+
+1. Crea (o pega) una pestaña con el nombre exacto:
+   `Insc <Nombre del evento> <Fecha YYYY-MM-DD>`
+   Por ejemplo, para el evento "Taller Bienestar" del 23 de septiembre de
+   2026, la pestaña debe llamarse `Insc Taller Bienestar 2026-09-23`
+   (mismo nombre + fecha que uses al crear el evento en la app).
+2. Esa pestaña debe tener una fila de encabezados con al menos una columna
+   cuyo título contenga la palabra "Rut" (mayúsculas o minúsculas, no
+   importa). Las demás columnas (correo, teléfono/WhatsApp, comuna,
+   región, ocupación, edad, género) se detectan automáticamente por
+   palabras clave en el encabezado — puedes pegar tal cual la hoja de
+   respuestas que genera un Google Form con el Formulario de inscripción
+   del documento de Fundación Bienestar Mayor, sin reordenar columnas.
+3. Si no existe la pestaña `Insc ...` para un evento, la app simplemente
+   registra a todos como asistentes sin cruce (comportamiento actual, sin
+   romper nada).
+4. En cada check-in, si el RUT escaneado aparece en esa lista, la fila del
+   `Maestro` y la del evento quedan con `Inscrito Previo: Sí` y los datos
+   de inscripción anexados; si no aparece, queda `Inscrito Previo: No`
+   (asistencia igual registrada, como "walk-in").
+
+> ¿Quieres que también arme el Formulario de inscripción (Google Form) con
+> los campos del documento de Fundación Bienestar Mayor, conectado
+> directamente a esta misma Sheet? Es un paso aparte que puedo dejar listo
+> si lo pides.
+
 ## Notas importantes
 
 - **Formato del QR de la cédula chilena**: el parser en `eventos.html`

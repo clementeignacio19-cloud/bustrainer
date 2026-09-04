@@ -91,7 +91,8 @@ function listAsistentes(evento, fecha, pin) {
       apellidoPaterno: r[headers.indexOf('Apellido Paterno')],
       apellidoMaterno: r[headers.indexOf('Apellido Materno')],
       sexo: r[headers.indexOf('Sexo')],
-      fechaNacimiento: r[headers.indexOf('Fecha Nacimiento')]
+      fechaNacimiento: r[headers.indexOf('Fecha Nacimiento')],
+      inscritoPrevio: r[headers.indexOf('Inscrito Previo')]
     });
   }
   return { ok: true, asistentes: asistentes };
@@ -118,6 +119,11 @@ function registrarAsistente(payload) {
     }
   }
 
+  // Cruce con la lista de inscritos previos (formulario de inscripción), si existe
+  // una pestaña para este evento. No es obligatorio: si no hay lista cargada, o el
+  // RUT no aparece en ella, la persona igual queda registrada como asistente.
+  const inscrito = run ? buscarInscrito(ss, evento, fechaEvento, run) : null;
+
   let fotoUrl = '';
   if (payload.fotoBase64) {
     fotoUrl = savePhotoToDrive(payload.fotoBase64, evento, fechaEvento, run || 'sin_run');
@@ -128,7 +134,12 @@ function registrarAsistente(payload) {
     now, evento, fechaEvento, run,
     payload.apellidoPaterno || '', payload.apellidoMaterno || '', payload.nombres || '',
     payload.fechaNacimiento || '', payload.sexo || '', payload.nacionalidad || '',
-    fotoUrl, payload.qrRaw || ''
+    fotoUrl, payload.qrRaw || '',
+    inscrito ? 'Sí' : 'No',
+    inscrito ? inscrito.correo : '', inscrito ? inscrito.telefono : '',
+    inscrito ? inscrito.comuna : '', inscrito ? inscrito.region : '',
+    inscrito ? inscrito.ocupacion : '', inscrito ? inscrito.edad : '',
+    inscrito ? inscrito.genero : ''
   ];
 
   eventSheet.appendRow(row);
@@ -138,12 +149,65 @@ function registrarAsistente(payload) {
   const count = countRows(eventSheet);
   updateEventCount(ss, tabName, count);
 
-  return { ok: true, duplicate: false, count: count, fotoUrl: fotoUrl };
+  return { ok: true, duplicate: false, count: count, fotoUrl: fotoUrl, inscritoPrevio: !!inscrito };
 }
 
 function rowHeaders() {
   return ['Timestamp', 'Evento', 'Fecha Evento', 'RUN', 'Apellido Paterno', 'Apellido Materno',
-    'Nombres', 'Fecha Nacimiento', 'Sexo', 'Nacionalidad', 'Foto URL', 'QR Raw'];
+    'Nombres', 'Fecha Nacimiento', 'Sexo', 'Nacionalidad', 'Foto URL', 'QR Raw',
+    'Inscrito Previo', 'Correo (inscripción)', 'Teléfono (inscripción)', 'Comuna (inscripción)',
+    'Región (inscripción)', 'Ocupación (inscripción)', 'Edad (inscripción)', 'Género autoidentificado (inscripción)'];
+}
+
+// ── Lista de inscritos previos ──
+// Pestaña opcional por evento, nombrada "Insc <evento> <fecha>" (ver
+// inscritosTabName). Se puede pegar ahí directamente la hoja de respuestas
+// del Formulario de inscripción (Google Forms). Solo se exige una columna
+// cuyo encabezado contenga "rut"; el resto de las columnas se detectan por
+// palabras clave en el título, sin importar el orden ni el texto exacto.
+function inscritosTabName(evento, fecha) {
+  const base = 'Insc ' + eventTabName(evento, fecha);
+  return base.length > 95 ? base.substring(0, 95) : base;
+}
+
+function buscarInscrito(ss, evento, fecha, run) {
+  const sheet = ss.getSheetByName(inscritosTabName(evento, fecha));
+  if (!sheet) return null;
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) return null;
+  const headers = rows[0];
+
+  const colRut = findColBy(headers, ['rut']);
+  if (colRut === -1) return null;
+
+  for (let i = 1; i < rows.length; i++) {
+    if (normalizeRun(rows[i][colRut]) === run) {
+      const get = (keywords) => {
+        const idx = findColBy(headers, keywords);
+        return idx === -1 ? '' : String(rows[i][idx] || '');
+      };
+      return {
+        correo: get(['correo', 'email']),
+        telefono: get(['telefono', 'teléfono', 'whatsapp', 'celular', 'fono']),
+        comuna: get(['comuna']),
+        region: get(['region', 'región']),
+        ocupacion: get(['ocupacion', 'ocupación']),
+        edad: get(['edad']),
+        genero: get(['genero', 'género', 'identifica'])
+      };
+    }
+  }
+  return null;
+}
+
+function findColBy(headers, keywords) {
+  const norm = (s) => String(s || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita tildes
+  for (let i = 0; i < headers.length; i++) {
+    const h = norm(headers[i]);
+    if (keywords.some(k => h.indexOf(norm(k)) !== -1)) return i;
+  }
+  return -1;
 }
 
 function countRows(sheet) {

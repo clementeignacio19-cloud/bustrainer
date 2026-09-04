@@ -541,7 +541,8 @@ $('confirm-guardar').addEventListener('click', async () => {
       toast('Esta persona ya estaba registrada en este evento', 'warn');
       state.count = r.count;
     } else if (r.ok) {
-      toast('Registrado correctamente', 'success');
+      const matchMsg = r.inscritoPrevio ? ' · inscrito previamente ✓' : ' · no estaba en la lista de inscritos';
+      toast('Registrado correctamente' + matchMsg, r.inscritoPrevio ? 'success' : 'warn');
       state.count = r.count;
     } else {
       throw new Error(r.error || 'error_desconocido');
