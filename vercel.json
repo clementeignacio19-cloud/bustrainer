@@ -2,6 +2,7 @@
   "routes": [
     { "src": "/", "dest": "/index_1.html" },
     { "src": "/portal", "dest": "/portal.html" },
+    { "src": "/eventos", "dest": "/eventos.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ]
 }
