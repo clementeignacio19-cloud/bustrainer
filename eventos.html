@@ -101,6 +101,10 @@
   #reader { width: 100%; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid var(--border); box-shadow: 0 4px 20px rgba(139,92,246,0.15); }
   #reader video { border-radius: 16px; }
 
+  .zoom-wrap { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .zoom-label { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .zoom-wrap input[type="range"] { flex: 1; accent-color: var(--purple); margin: 0; }
+
   .pending-badge { font-family: var(--mono); font-size: 11px; color: var(--amber); text-align: center; margin-top: 10px; display: none; }
   .pending-badge.show { display: block; }
 
@@ -183,10 +187,16 @@
   </div>
 
   <div id="reader"></div>
-  <p class="sub" style="margin-top:1rem;text-align:center">Apunta la cámara al código QR del carnet.</p>
+  <div class="zoom-wrap" id="zoom-wrap" style="display:none">
+    <span class="zoom-label">🔍−</span>
+    <input type="range" id="zoom-range" min="1" max="5" step="0.1" value="1">
+    <span class="zoom-label">+</span>
+  </div>
+  <p class="sub" style="margin-top:1rem;text-align:center">Encuadra <strong>solo el QR</strong> del carnet dentro del recuadro, con buena luz y sin reflejos.</p>
   <div class="pending-badge" id="pending-badge"></div>
 
   <button class="btn-secondary" id="scan-cambiar-evento">Cambiar de evento</button>
+  <button class="btn-ghost" id="scan-manual">¿No lee el QR? Ingresar datos a mano</button>
 </div>
 
 <!-- OVERLAY: CONFIRMAR DATOS -->
@@ -404,6 +414,16 @@ $('scan-cambiar-evento').addEventListener('click', () => {
   goToEventoScreen();
 });
 
+$('scan-manual').addEventListener('click', () => {
+  if (!scanning) return;
+  scanning = false;
+  html5QrCode.pause(true);
+  abrirConfirmacion({
+    run: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
+    nacionalidad: '', fechaNacimiento: '', sexo: '', qrRaw: 'INGRESADO_MANUAL', parseOk: false
+  }, '');
+});
+
 // ── ESCÁNER ──
 let html5QrCode = null;
 let scanning = false;
@@ -413,10 +433,31 @@ function startScanner() {
   scanning = true;
   html5QrCode.start(
     { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 260, height: 260 } },
+    {
+      fps: 15,
+      // Recuadro grande (85% del lado más chico del visor) para dar más
+      // margen y más resolución real al código dentro del área de lectura.
+      qrbox: (viewfinderWidth, viewfinderHeight) => {
+        const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+        const size = Math.floor(minEdge * 0.85);
+        return { width: size, height: size };
+      },
+      aspectRatio: 1.0,
+      // Pide la mayor resolución posible: los QR de cédula son densos y
+      // necesitan buena definición para decodificarse bien.
+      videoConstraints: {
+        facingMode: 'environment',
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        advanced: [{ focusMode: 'continuous' }]
+      },
+      // En Android/Chrome usa el detector nativo del sistema si está
+      // disponible: suele ser más robusto que el decodificador en JS puro.
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    },
     onScanSuccess,
     () => {}
-  ).catch(err => {
+  ).then(setupZoomControl).catch(err => {
     toast('No se pudo abrir la cámara: revisa los permisos', 'warn');
   });
 }
@@ -426,6 +467,24 @@ function stopScanner() {
     html5QrCode.stop().catch(() => {});
     scanning = false;
   }
+  $('zoom-wrap').style.display = 'none';
+}
+
+// ── Zoom óptico/digital (si el dispositivo lo soporta — sobre todo Android) ──
+function setupZoomControl() {
+  try {
+    const caps = html5QrCode.getRunningTrackCapabilities();
+    if (!caps || !caps.zoom) return;
+    const range = $('zoom-range');
+    range.min = caps.zoom.min;
+    range.max = caps.zoom.max;
+    range.step = caps.zoom.step || 0.1;
+    range.value = caps.zoom.min;
+    $('zoom-wrap').style.display = 'flex';
+    range.oninput = () => {
+      html5QrCode.applyVideoConstraints({ advanced: [{ zoom: Number(range.value) }] }).catch(() => {});
+    };
+  } catch (e) { /* zoom no soportado en este navegador/dispositivo */ }
 }
 
 function onScanSuccess(decodedText) {
