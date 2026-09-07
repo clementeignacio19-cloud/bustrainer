@@ -239,12 +239,13 @@
 // ════════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYSH289VUwr47nRrHsHR3pWPvJGZYNI2PGGeHW_erJr5d50P_883UP8YYjcL9WpVrS/exec";
 
-const LS_PIN = 'eventosqr_pin';
 const LS_EVENTO = 'eventosqr_evento_actual';
 const LS_PENDING = 'eventosqr_pending';
 
+// La clave (PIN) se pide siempre al abrir la app — solo vive en memoria
+// (state.pin) mientras la pestaña/app está abierta, nunca en localStorage.
 let state = {
-  pin: localStorage.getItem(LS_PIN) || '',
+  pin: '',
   evento: JSON.parse(localStorage.getItem(LS_EVENTO) || 'null'),
   eventos: [],
   count: 0
@@ -326,9 +327,13 @@ $('pin-submit').addEventListener('click', async () => {
   try {
     const r = await apiGet('init');
     if (!r.ok) throw new Error(r.error || 'pin_invalido');
-    localStorage.setItem(LS_PIN, pin);
     state.eventos = r.eventos || [];
-    goToEventoScreen();
+    if (state.evento) {
+      const found = state.eventos.find(e => e.nombre === state.evento.nombre && e.fecha === state.evento.fecha);
+      selectEvento(state.evento.nombre, state.evento.fecha, found ? found.asistentes : 0);
+    } else {
+      goToEventoScreen();
+    }
   } catch (err) {
     $('pin-error').textContent = 'Clave incorrecta o sin conexión con el servidor.';
     $('pin-error').classList.add('show');
@@ -340,7 +345,6 @@ $('pin-submit').addEventListener('click', async () => {
 
 $('cerrar-sesion').addEventListener('click', (e) => {
   e.preventDefault();
-  localStorage.removeItem(LS_PIN);
   localStorage.removeItem(LS_EVENTO);
   state.pin = ''; state.evento = null;
   $('pin-input').value = '';
@@ -637,24 +641,11 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── INICIO ──
-(async function init() {
+// Siempre se parte en la pantalla de la clave: el PIN no se recuerda entre
+// aperturas de la app (solo el último evento, para no tener que recrearlo).
+(function init() {
   if (!checkConfigured()) return;
   renderPendingBadge();
-  if (state.pin) {
-    try {
-      const r = await apiGet('init');
-      if (r.ok) {
-        state.eventos = r.eventos || [];
-        if (state.evento) {
-          const found = state.eventos.find(e => e.nombre === state.evento.nombre && e.fecha === state.evento.fecha);
-          selectEvento(state.evento.nombre, state.evento.fecha, found ? found.asistentes : 0);
-          return;
-        }
-        goToEventoScreen();
-        return;
-      }
-    } catch (e) { /* sigue a pantalla de PIN */ }
-  }
   showScreen('screen-pin');
 })();
 </script>
