@@ -126,6 +126,7 @@
   .confirm-photo { width: 100%; max-height: 160px; object-fit: cover; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border); }
   .confirm-title { font-size: 16px; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
   .parse-warning { background: rgba(180,83,9,0.08); border: 1px solid rgba(180,83,9,0.3); color: var(--amber); border-radius: 10px; padding: 10px 14px; font-size: 12px; margin-bottom: 1rem; }
+  .parse-raw { font-family: var(--mono); font-size: 11px; color: var(--text); background: rgba(255,255,255,0.6); border-radius: 6px; padding: 8px; margin-top: 8px; word-break: break-all; user-select: all; }
   .field-row { display: flex; gap: 10px; }
   .field-row > div { flex: 1; }
 
@@ -206,7 +207,10 @@
   <div class="confirm-sheet">
     <img class="confirm-photo" id="confirm-photo" src="" alt="Foto QR">
     <div class="confirm-title">Confirmar datos</div>
-    <div class="parse-warning" id="parse-warning" style="display:none">No se pudo leer el QR con el formato esperado. Revisa y completa los datos manualmente antes de guardar.</div>
+    <div class="parse-warning" id="parse-warning" style="display:none">
+      No se pudo leer el QR con el formato esperado. Revisa y completa los datos manualmente antes de guardar.
+      <div class="parse-raw" id="parse-raw"></div>
+    </div>
 
     <label>RUN</label>
     <input type="text" id="c-run">
@@ -520,22 +524,62 @@ function capturarFoto() {
 // Orden estándar (2013+): RUN;Paterno;Materno;Nombres;Nacionalidad;
 // FechaNacimiento(DDMMYYYY);Sexo;FechaEmision;NumDocumento
 // Si en la práctica el orden real viene distinto, ajusta los índices abajo.
+// Parser "por patrones": en vez de asumir un orden fijo de campos (que
+// puede variar entre series de cédula), reconoce cada dato por su forma
+// (RUN, fecha, sexo, código de país) sin importar en qué posición venga.
+// Lo único que asume es que los tokens puramente alfabéticos (apellidos y
+// nombres) vienen en el orden apellido paterno → materno → nombres, que es
+// el más común — si viniera al revés, se corrige a mano en la tarjeta de
+// confirmación, que siempre queda editable.
 function parseCedulaChilena(raw) {
-  const parts = raw.split(';').map(s => s.trim()).filter(s => s.length);
   const result = {
     run: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
     nacionalidad: '', fechaNacimiento: '', sexo: '', qrRaw: raw, parseOk: false
   };
-  if (parts.length >= 7) {
-    result.run = normalizeRun(parts[0]);
-    result.apellidoPaterno = parts[1] || '';
-    result.apellidoMaterno = parts[2] || '';
-    result.nombres = parts[3] || '';
-    result.nacionalidad = parts[4] || '';
-    result.fechaNacimiento = normalizeFechaDDMMYYYY(parts[5]);
-    result.sexo = normalizeSexo(parts[6]);
-    result.parseOk = !!(result.run && result.nombres);
+
+  let parts = raw.split(/[;|\t\n]+/).map(s => s.trim()).filter(Boolean);
+  if (parts.length < 3) parts = raw.split(/\s{2,}/).map(s => s.trim()).filter(Boolean);
+  if (parts.length < 3) parts = raw.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return result;
+
+  const RUN_RE = /^\d{6,9}-?[\dkK]$/;
+  const SEX_RE = /^[MFH]$/i;
+  const NAT_RE = /^[A-Z]{3}$/;
+  const NAME_RE = /^[A-ZÀ-ÖØ-Ýa-zà-öø-ý][A-ZÀ-ÖØ-Ýa-zà-öø-ý' .-]+$/;
+
+  const dateTokens = [];
+  const nameTokens = [];
+
+  parts.forEach((raw_, idx) => {
+    const p = raw_.replace(/\.$/, '');
+    if (!result.run && RUN_RE.test(p.replace(/\./g, ''))) { result.run = normalizeRun(p); return; }
+    const iso = normalizeFechaDDMMYYYY(p);
+    if (iso) { dateTokens.push({ idx, iso }); return; }
+    if (!result.sexo && SEX_RE.test(p)) { result.sexo = normalizeSexo(p); return; }
+    if (!result.nacionalidad && NAT_RE.test(p)) { result.nacionalidad = p.toUpperCase(); return; }
+    if (NAME_RE.test(p)) { nameTokens.push({ idx, text: p }); return; }
+  });
+
+  // Si hay dos fechas (nacimiento + emisión), la más antigua es el nacimiento.
+  if (dateTokens.length) {
+    dateTokens.sort((a, b) => a.iso.localeCompare(b.iso));
+    result.fechaNacimiento = dateTokens[0].iso;
   }
+
+  nameTokens.sort((a, b) => a.idx - b.idx);
+  const names = nameTokens.map(n => n.text);
+  if (names.length >= 3) {
+    result.apellidoPaterno = names[0];
+    result.apellidoMaterno = names[1];
+    result.nombres = names.slice(2).join(' ');
+  } else if (names.length === 2) {
+    result.apellidoPaterno = names[0];
+    result.nombres = names[1];
+  } else if (names.length === 1) {
+    result.nombres = names[0];
+  }
+
+  result.parseOk = !!(result.run && (result.nombres || result.apellidoPaterno));
   return result;
 }
 
@@ -572,6 +616,7 @@ function abrirConfirmacion(parsed, fotoDataUrl) {
   $('confirm-photo').src = fotoDataUrl || '';
   $('confirm-photo').style.display = fotoDataUrl ? 'block' : 'none';
   $('parse-warning').style.display = parsed.parseOk ? 'none' : 'block';
+  $('parse-raw').textContent = parsed.parseOk ? '' : (parsed.qrRaw || '');
   $('c-run').value = parsed.run;
   $('c-apellido-paterno').value = parsed.apellidoPaterno;
   $('c-apellido-materno').value = parsed.apellidoMaterno;

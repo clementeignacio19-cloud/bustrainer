@@ -16,13 +16,11 @@ const PROPS = PropertiesService.getScriptProperties();
 const SHEET_MAESTRO = 'Maestro';
 const SHEET_EVENTOS = 'Eventos';
 
-// Orden de los campos del QR de la cédula chilena (2013+). Si al probar con
-// un carnet real el orden sale distinto, ajusta este arreglo — es lo único
-// que hay que tocar para corregir el parseo.
-const CEDULA_FIELD_ORDER = [
-  'run', 'apellidoPaterno', 'apellidoMaterno', 'nombres',
-  'nacionalidad', 'fechaNacimiento', 'sexo', 'fechaEmision', 'numeroDocumento'
-];
+// El parseo del QR de la cédula (RUN, nombres, sexo, fecha nacimiento) pasa
+// enteramente en el frontend (eventos.html, función parseCedulaChilena) por
+// reconocimiento de patrones, no por un orden fijo de campos. Este backend
+// solo recibe los campos ya interpretados (o vacíos si no se pudo parsear)
+// más el texto crudo del QR en qrRaw, que siempre se guarda como respaldo.
 
 function doGet(e) {
   try {
