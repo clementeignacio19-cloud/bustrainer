@@ -2,7 +2,7 @@
 // "Eventos QR" instalable como app (requisito de Chrome/Android). No cachea
 // las llamadas al backend (Apps Script): esas siempre van a la red, para
 // no mostrar datos de asistentes desactualizados.
-const CACHE = 'eventos-qr-shell-v1';
+const CACHE = 'eventos-qr-shell-v2';
 const SHELL_FILES = ['/eventos', '/eventos.html', '/manifest_eventos.json'];
 
 self.addEventListener('install', (event) => {
