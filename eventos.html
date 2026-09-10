@@ -190,12 +190,17 @@
   </div>
 
   <div id="reader"></div>
+  <div id="reader-file" style="display:none"></div>
   <div class="zoom-wrap" id="zoom-wrap" style="display:none">
     <span class="zoom-label">🔍−</span>
     <input type="range" id="zoom-range" min="1" max="5" step="0.1" value="1">
     <span class="zoom-label">+</span>
   </div>
   <p class="sub" style="margin-top:1rem;text-align:center">Encuadra <strong>solo el QR</strong> del carnet dentro del recuadro, con buena luz y sin reflejos.</p>
+
+  <button class="btn-primary" id="scan-foto-precisa">📸 Tomar foto y analizar (modo preciso)</button>
+  <p class="sub" style="margin-top:-0.5rem;font-size:12px">Si el escaneo en vivo no detecta el QR, usa este botón: toma una foto fija en alta resolución y la analiza con más calma — funciona mejor con códigos densos como el de la cédula.</p>
+
   <div class="pending-badge" id="pending-badge"></div>
 
   <button class="btn-secondary" id="scan-cambiar-evento">Cambiar de evento</button>
@@ -519,6 +524,84 @@ function capturarFoto() {
     return canvas.toDataURL('image/jpeg', 0.7);
   } catch (e) { return ''; }
 }
+
+// ── MODO PRECISO: foto fija en alta resolución + reintentos con recortes ──
+// El escaneo en vivo decodifica cada frame rápido y en baja calidad, lo que
+// falla seguido con QRs densos (como el de la cédula). Esta alternativa
+// toma UNA foto a la resolución nativa de la cámara y la analiza con calma,
+// probando además recortes del centro ampliados por si el QR ocupa poco
+// espacio dentro del encuadre — igual que hacen las apps de escaneo serias.
+let fileQrCode = null;
+
+function cropCanvas(source, fraction, scale) {
+  const cw = source.width * fraction;
+  const ch = source.height * fraction;
+  const cx = (source.width - cw) / 2;
+  const cy = (source.height - ch) / 2;
+  const out = document.createElement('canvas');
+  out.width = cw * scale;
+  out.height = ch * scale;
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, cx, cy, cw, ch, 0, 0, out.width, out.height);
+  return out;
+}
+
+function canvasToFile(canvas) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(new File([blob], 'foto.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.95);
+  });
+}
+
+async function decodeStillPhoto() {
+  const video = document.querySelector('#reader video');
+  if (!video || !video.videoWidth) throw new Error('camara_no_lista');
+
+  const full = document.createElement('canvas');
+  full.width = video.videoWidth;
+  full.height = video.videoHeight;
+  full.getContext('2d').drawImage(video, 0, 0);
+
+  const candidatos = [full, cropCanvas(full, 0.7, 1.4), cropCanvas(full, 0.45, 2.2), cropCanvas(full, 0.3, 3)];
+
+  if (!fileQrCode) fileQrCode = new Html5Qrcode('reader-file');
+
+  for (const canvas of candidatos) {
+    try {
+      const file = await canvasToFile(canvas);
+      const decodedText = await fileQrCode.scanFile(file, false);
+      return { decodedText, foto: full.toDataURL('image/jpeg', 0.8) };
+    } catch (e) { /* prueba el siguiente recorte */ }
+  }
+  return null;
+}
+
+$('scan-foto-precisa').addEventListener('click', async () => {
+  const btn = $('scan-foto-precisa');
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'Analizando…';
+  const wasScanning = scanning;
+  if (html5QrCode && wasScanning) html5QrCode.pause(true);
+  try {
+    const resultado = await decodeStillPhoto();
+    if (!resultado) {
+      toast('No se detectó ningún QR en la foto — intenta de nuevo o ingresa a mano', 'warn');
+      if (wasScanning) html5QrCode.resume();
+      return;
+    }
+    scanning = false;
+    const parsed = parseCedulaChilena(resultado.decodedText);
+    abrirConfirmacion(parsed, resultado.foto);
+  } catch (e) {
+    toast('No se pudo analizar la foto: revisa los permisos de cámara', 'warn');
+    if (wasScanning) html5QrCode.resume();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+});
 
 // ── Parser del QR de la cédula chilena ──
 // Orden estándar (2013+): RUN;Paterno;Materno;Nombres;Nacionalidad;
