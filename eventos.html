@@ -260,12 +260,15 @@
 // ════════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYSH289VUwr47nRrHsHR3pWPvJGZYNI2PGGeHW_erJr5d50P_883UP8YYjcL9WpVrS/exec";
 
-// Catálogo de nombres de evento (opcional): agrega aquí los nombres
-// oficiales cuando los tengas y aparecerán como lista seleccionable arriba
-// del campo de texto. Mientras esté vacío, esa lista queda oculta y solo
-// se usa el campo de texto libre. Ejemplo:
-// const EVENT_NAME_OPTIONS = ['Taller de Bienestar', 'Encuentro Anual'];
-const EVENT_NAME_OPTIONS = [];
+// Catálogo de nombres de evento — del Formulario de inscripción oficial de
+// Fundación Bienestar Mayor. "Otro" es especial: al elegirlo se limpia el
+// campo de texto para escribir el nombre puntual, en vez de rellenarlo con
+// la palabra "Otro".
+const EVENT_NAME_OPTIONS = [
+  'Taller de Poesía Erótica', 'Jornadas', 'Encuentros', 'Consejerías Integrales',
+  'Círculos Psicoterapéuticos', 'Círculos Psicoeducativos', 'Charlas',
+  'Capacitaciones', 'Bingo Educativo', 'Otro'
+];
 
 const LS_EVENTO = 'eventosqr_evento_actual';
 const LS_PENDING = 'eventosqr_pending';
@@ -398,7 +401,14 @@ function renderCatalogoEventos() {
 }
 
 $('evento-catalogo').addEventListener('change', (e) => {
-  if (e.target.value) $('evento-nombre').value = e.target.value;
+  if (!e.target.value) return;
+  if (e.target.value === 'Otro') {
+    $('evento-nombre').value = '';
+    $('evento-nombre').placeholder = '¿Cuál? — escribe el nombre del evento';
+    $('evento-nombre').focus();
+  } else {
+    $('evento-nombre').value = e.target.value;
+  }
 });
 
 function todayStr() {
