@@ -160,6 +160,19 @@
   </div>
 </div>
 
+<!-- PANTALLA 1.5: VERIFICACIÓN (NO SOY UN ROBOT) -->
+<div class="screen" id="screen-captcha">
+  <div class="center-flex">
+    <div class="brand-block"><img class="brand-logo" src="logo-fbm.png" alt="Fundación Bienestar Mayor"><div class="brand-title">App Scanner FBM</div></div>
+    <h1>Verificación</h1>
+    <p class="sub">Para confirmar que no eres un robot, resuelve esto:</p>
+    <div class="error-box" id="captcha-error">Respuesta incorrecta, intenta de nuevo.</div>
+    <label id="captcha-pregunta">¿Cuánto es 4 + 7?</label>
+    <input type="text" inputmode="numeric" id="captcha-input" placeholder="Tu respuesta" autocomplete="off">
+    <button class="btn-primary" id="captcha-verificar">Verificar</button>
+  </div>
+</div>
+
 <!-- PANTALLA 2: SELECCIÓN / CREACIÓN DE EVENTO -->
 <div class="screen" id="screen-evento">
   <button class="back-btn" id="btn-atras-evento">‹ Atrás</button>
@@ -387,7 +400,7 @@ $('pin-submit').addEventListener('click', async () => {
     const r = await apiGet('init');
     if (!r.ok) throw new Error(r.error || 'pin_invalido');
     state.eventos = r.eventos || [];
-    goToEventoScreen(); // siempre se pasa primero por "elegir evento", nunca directo al escáner
+    goToCaptchaScreen(); // clave correcta → verificación "no soy un robot" → recién ahí el evento
   } catch (err) {
     $('pin-error').textContent = 'Clave incorrecta o sin conexión con el servidor.';
     $('pin-error').classList.add('show');
@@ -395,6 +408,47 @@ $('pin-submit').addEventListener('click', async () => {
     $('pin-submit').disabled = false;
     $('pin-submit').textContent = 'Ingresar';
   }
+});
+
+$('pin-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('pin-submit').click();
+});
+
+// ── PANTALLA CAPTCHA ("no soy un robot") ──
+// Desafío simple generado y validado en la app, sin depender de ningún
+// servicio externo: la app ya está protegida con PIN y es de uso interno
+// del equipo, así que esto es una capa extra liviana, no un sistema
+// anti-bots real como reCAPTCHA.
+let captchaRespuesta = 0;
+
+function generarCaptcha() {
+  const a = Math.floor(Math.random() * 8) + 2; // 2–9
+  const b = Math.floor(Math.random() * 8) + 2;
+  captchaRespuesta = a + b;
+  $('captcha-pregunta').textContent = `¿Cuánto es ${a} + ${b}?`;
+  $('captcha-input').value = '';
+  $('captcha-error').classList.remove('show');
+}
+
+function goToCaptchaScreen() {
+  generarCaptcha();
+  showScreen('screen-captcha');
+  $('captcha-input').focus();
+}
+
+$('captcha-verificar').addEventListener('click', () => {
+  const val = parseInt($('captcha-input').value.trim(), 10);
+  if (val === captchaRespuesta) {
+    goToEventoScreen();
+  } else {
+    $('captcha-error').classList.add('show');
+    generarCaptcha();
+    $('captcha-input').focus();
+  }
+});
+
+$('captcha-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('captcha-verificar').click();
 });
 
 $('cerrar-sesion').addEventListener('click', (e) => {
