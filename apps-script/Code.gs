@@ -28,6 +28,7 @@ function doGet(e) {
     if (action === 'init') return jsonResponse(initResponse(e.parameter.pin));
     if (action === 'list') return jsonResponse(listAsistentes(e.parameter.evento, e.parameter.fecha, e.parameter.pin));
     if (action === 'buscarInscrito') return jsonResponse(buscarInscritoPublico(e.parameter.evento, e.parameter.fecha, e.parameter.run, e.parameter.pin));
+    if (action === 'listInscritos') return jsonResponse(listInscritosPublico(e.parameter.evento, e.parameter.fecha, e.parameter.pin));
     return jsonResponse({ ok: false, error: 'accion_invalida' });
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
@@ -241,46 +242,85 @@ function inscritosTabName(evento, fecha) {
   return base.length > 95 ? base.substring(0, 95) : base;
 }
 
+// Ubica, una sola vez por hoja, en qué columna está cada dato de interés
+// (por palabras clave en el encabezado). Se reutiliza tanto para buscar
+// una sola persona (buscarInscrito) como para traer la lista completa de
+// una vez (listInscritosPublico, usada para precargar en la app y evitar
+// una llamada a la red por cada escaneo).
+function inscritoColumnIndexes(headers) {
+  return {
+    rut: findColBy(headers, ['rut']),
+    nombres: findColBy(headers, ['nombre'], ['evento']),
+    apellidoPaterno: findColBy(headers, ['apellido paterno', 'apellido']),
+    apellidoMaterno: findColBy(headers, ['apellido materno']),
+    fechaNacimiento: findColBy(headers, ['nacimiento']),
+    correo: findColBy(headers, ['correo', 'email']),
+    telefono: findColBy(headers, ['telefono', 'teléfono', 'whatsapp', 'celular', 'fono']),
+    comuna: findColBy(headers, ['comuna']),
+    region: findColBy(headers, ['region', 'región']),
+    ocupacion: findColBy(headers, ['ocupacion', 'ocupación']),
+    edad: findColBy(headers, ['edad']),
+    genero: findColBy(headers, ['genero', 'género', 'identifica', 'sexo'], ['evento'])
+  };
+}
+
+// row: una fila de valores. idx: el resultado de inscritoColumnIndexes.
+// La fecha se lee del valor crudo de la celda (no via String()) porque
+// Sheets convierte solo los textos con pinta de fecha a un objeto Date
+// real al escribir la fila, y normalizeFechaTexto necesita distinguir
+// ambos casos.
+function extractInscrito(row, idx) {
+  const get = (i) => i === -1 ? '' : String(row[i] || '');
+  return {
+    nombres: get(idx.nombres),
+    apellidoPaterno: get(idx.apellidoPaterno),
+    apellidoMaterno: get(idx.apellidoMaterno),
+    fechaNacimiento: idx.fechaNacimiento === -1 ? '' : normalizeFechaTexto(row[idx.fechaNacimiento]),
+    correo: get(idx.correo),
+    telefono: get(idx.telefono),
+    comuna: get(idx.comuna),
+    region: get(idx.region),
+    ocupacion: get(idx.ocupacion),
+    edad: get(idx.edad),
+    genero: get(idx.genero)
+  };
+}
+
 function buscarInscrito(ss, evento, fecha, run) {
   const sheet = ss.getSheetByName(inscritosTabName(evento, fecha));
   if (!sheet) return null;
   const rows = sheet.getDataRange().getValues();
   if (rows.length < 2) return null;
-  const headers = rows[0];
-
-  const colRut = findColBy(headers, ['rut']);
-  if (colRut === -1) return null;
+  const idx = inscritoColumnIndexes(rows[0]);
+  if (idx.rut === -1) return null;
 
   for (let i = 1; i < rows.length; i++) {
-    if (normalizeRun(rows[i][colRut]) === run) {
-      const idxOf = (keywords, exclude) => findColBy(headers, keywords, exclude);
-      const get = (keywords, exclude) => {
-        const idx = idxOf(keywords, exclude);
-        return idx === -1 ? '' : String(rows[i][idx] || '');
-      };
-      // La fecha puede llegar como objeto Date real (Sheets convierte solo
-      // los textos con pinta de fecha al escribir la fila), así que se lee
-      // el valor crudo de la celda — sin pasarlo por String() antes — para
-      // que normalizeFechaTexto pueda distinguir ambos casos.
-      const idxNacimiento = idxOf(['nacimiento']);
-      const idxPaterno = idxOf(['apellido paterno', 'apellido']);
-      const idxMaterno = idxOf(['apellido materno']);
-      return {
-        nombres: get(['nombre'], ['evento']),
-        apellidoPaterno: idxPaterno === -1 ? '' : String(rows[i][idxPaterno] || ''),
-        apellidoMaterno: idxMaterno === -1 ? '' : String(rows[i][idxMaterno] || ''),
-        fechaNacimiento: idxNacimiento === -1 ? '' : normalizeFechaTexto(rows[i][idxNacimiento]),
-        correo: get(['correo', 'email']),
-        telefono: get(['telefono', 'teléfono', 'whatsapp', 'celular', 'fono']),
-        comuna: get(['comuna']),
-        region: get(['region', 'región']),
-        ocupacion: get(['ocupacion', 'ocupación']),
-        edad: get(['edad']),
-        genero: get(['genero', 'género', 'identifica', 'sexo'], ['evento'])
-      };
-    }
+    if (normalizeRun(rows[i][idx.rut]) === run) return extractInscrito(rows[i], idx);
   }
   return null;
+}
+
+// Trae TODA la lista de inscritos de un evento de una vez, para que la app
+// la precargue al entrar a escanear y busque por RUT localmente (sin red)
+// en cada escaneo — clave para no perder tiempo con 200+ personas.
+function listInscritosPublico(evento, fecha, pin) {
+  if (!checkPin(pin)) return { ok: false, error: 'pin_invalido' };
+  if (!evento || !fecha) return { ok: false, error: 'datos_incompletos' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(inscritosTabName(evento, fecha));
+  if (!sheet) return { ok: true, inscritos: [] };
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) return { ok: true, inscritos: [] };
+  const idx = inscritoColumnIndexes(rows[0]);
+  if (idx.rut === -1) return { ok: true, inscritos: [] };
+
+  const inscritos = [];
+  for (let i = 1; i < rows.length; i++) {
+    const run = normalizeRun(rows[i][idx.rut]);
+    if (!run) continue;
+    inscritos.push(Object.assign({ run: run }, extractInscrito(rows[i], idx)));
+  }
+  return { ok: true, inscritos: inscritos };
 }
 
 // keywords: coincide si el encabezado contiene alguna de estas palabras.

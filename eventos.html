@@ -41,6 +41,8 @@
   .screen { display: none; min-height: 100vh; flex-direction: column; padding: 1.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom)); }
   .screen.active { display: flex; }
 
+  .back-btn { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: var(--purple); font-family: var(--font); font-size: 14px; font-weight: 600; padding: 6px 4px; margin-bottom: 0.75rem; width: auto; cursor: pointer; }
+  .back-btn:active { opacity: 0.6; }
   .brand-block { text-align: center; margin-bottom: 2rem; }
   .brand-logo { width: 150px; max-width: 60%; height: auto; margin: 0 auto 12px; display: block; }
   .brand-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.25em; color: var(--purple); text-transform: uppercase; }
@@ -160,6 +162,7 @@
 
 <!-- PANTALLA 2: SELECCIÓN / CREACIÓN DE EVENTO -->
 <div class="screen" id="screen-evento">
+  <button class="back-btn" id="btn-atras-evento">‹ Atrás</button>
   <div class="brand-block"><img class="brand-logo" src="logo-fbm.png" alt="Fundación Bienestar Mayor"><div class="brand-title">App Scanner FBM</div></div>
   <h1>¿Qué evento vas a registrar?</h1>
   <p class="sub">Crea uno nuevo o continúa uno que ya está en curso.</p>
@@ -188,6 +191,7 @@
 
 <!-- PANTALLA 3: ESCÁNER -->
 <div class="screen" id="screen-scan">
+  <button class="back-btn" id="btn-atras-scan">‹ Cambiar de evento</button>
   <div class="scan-header">
     <div>
       <div class="scan-evento" id="scan-evento-nombre"></div>
@@ -353,13 +357,19 @@ async function flushPending() {
   const pending = getPending();
   if (!pending.length) return;
   const remaining = [];
+  let subidos = 0;
   for (const item of pending) {
     try {
       const r = await apiPost(item);
-      if (!r.ok) remaining.push(item);
+      if (!r.ok) { remaining.push(item); continue; }
+      if (!r.duplicate) subidos++;
     } catch (e) { remaining.push(item); }
   }
   setPending(remaining);
+  if (subidos > 0 && state.evento && pending[0] && pending[0].evento === state.evento.nombre) {
+    state.count = (state.count || 0) + subidos;
+    $('scan-counter').textContent = state.count;
+  }
   if (remaining.length < pending.length) toast('Registros pendientes sincronizados', 'success');
 }
 window.addEventListener('online', flushPending);
@@ -391,6 +401,12 @@ $('cerrar-sesion').addEventListener('click', (e) => {
   e.preventDefault();
   localStorage.removeItem(LS_EVENTO);
   state.pin = ''; state.evento = null;
+  $('pin-input').value = '';
+  showScreen('screen-pin');
+});
+
+$('btn-atras-evento').addEventListener('click', () => {
+  state.pin = '';
   $('pin-input').value = '';
   showScreen('screen-pin');
 });
@@ -522,6 +538,25 @@ function selectEvento(nombre, fecha, count) {
   $('scan-counter').textContent = count;
   showScreen('screen-scan');
   startScanner();
+  precargarInscritos(); // en paralelo — no bloquea la cámara
+}
+
+// ── Precarga de inscritos: una sola llamada al entrar al evento, en vez
+// de una por cada persona escaneada. Con 200+ escaneos esto es la
+// diferencia entre 200 idas y vueltas a la red o solo 1. ──
+let inscritosPorRun = new Map();
+let inscritosCargados = false;
+
+async function precargarInscritos() {
+  inscritosPorRun = new Map();
+  inscritosCargados = false;
+  try {
+    const r = await apiGet('listInscritos', { evento: state.evento.nombre, fecha: state.evento.fecha });
+    if (r.ok) {
+      (r.inscritos || []).forEach(p => inscritosPorRun.set(p.run, p));
+      inscritosCargados = true;
+    }
+  } catch (e) { /* si falla, procesarEscaneo cae al lookup por-escaneo */ }
 }
 
 function formatFechaLarga(fechaStr) {
@@ -531,6 +566,11 @@ function formatFechaLarga(fechaStr) {
 }
 
 $('scan-cambiar-evento').addEventListener('click', () => {
+  stopScanner();
+  goToEventoScreen();
+});
+
+$('btn-atras-scan').addEventListener('click', () => {
   stopScanner();
   goToEventoScreen();
 });
@@ -623,22 +663,30 @@ function onScanSuccess(decodedText) {
 async function procesarEscaneo(parsed, foto) {
   let final = parsed;
   if (parsed.run && state.evento) {
-    try {
-      const r = await apiGet('buscarInscrito', { run: parsed.run, evento: state.evento.nombre, fecha: state.evento.fecha });
-      if (r.ok && r.encontrado && r.inscrito) {
-        final = {
-          ...parsed,
-          nombres: r.inscrito.nombres || parsed.nombres,
-          apellidoPaterno: r.inscrito.apellidoPaterno || parsed.apellidoPaterno,
-          apellidoMaterno: r.inscrito.apellidoMaterno || parsed.apellidoMaterno,
-          sexo: normalizeGeneroInscrito(r.inscrito.genero) || parsed.sexo,
-          fechaNacimiento: r.inscrito.fechaNacimiento || parsed.fechaNacimiento,
-          parseOk: true,
-          soloRun: false,
-          inscritoEncontrado: true
-        };
-      }
-    } catch (e) { /* sigue con lo que trajo el QR, sin bloquear el flujo */ }
+    let inscrito = null;
+    if (inscritosCargados) {
+      // Búsqueda local instantánea — sin ida y vuelta a la red.
+      inscrito = inscritosPorRun.get(parsed.run) || null;
+    } else {
+      // Respaldo si la precarga aún no terminó o falló.
+      try {
+        const r = await apiGet('buscarInscrito', { run: parsed.run, evento: state.evento.nombre, fecha: state.evento.fecha });
+        if (r.ok && r.encontrado) inscrito = r.inscrito;
+      } catch (e) { /* sigue con lo que trajo el QR, sin bloquear el flujo */ }
+    }
+    if (inscrito) {
+      final = {
+        ...parsed,
+        nombres: inscrito.nombres || parsed.nombres,
+        apellidoPaterno: inscrito.apellidoPaterno || parsed.apellidoPaterno,
+        apellidoMaterno: inscrito.apellidoMaterno || parsed.apellidoMaterno,
+        sexo: normalizeGeneroInscrito(inscrito.genero) || parsed.sexo,
+        fechaNacimiento: inscrito.fechaNacimiento || parsed.fechaNacimiento,
+        parseOk: true,
+        soloRun: false,
+        inscritoEncontrado: true
+      };
+    }
   }
   abrirConfirmacion(final, foto);
 }
@@ -898,7 +946,7 @@ function cerrarConfirmacionYReanudar() {
 
 $('confirm-descartar').addEventListener('click', cerrarConfirmacionYReanudar);
 
-$('confirm-guardar').addEventListener('click', async () => {
+$('confirm-guardar').addEventListener('click', () => {
   const payload = {
     evento: state.evento.nombre,
     fechaEvento: state.evento.fecha,
@@ -922,33 +970,35 @@ $('confirm-guardar').addEventListener('click', async () => {
     ocupacion: $('c-ocupacion').value.trim()
   };
 
-  $('confirm-guardar').disabled = true;
-  $('confirm-guardar').textContent = 'Guardando...';
+  // Vuelve a escanear AL TOQUE — el guardado va en segundo plano. Con 200+
+  // personas, esperar la red (foto a Drive incluida) en cada una suma
+  // minutos muertos; así el operador nunca espera.
+  cerrarConfirmacionYReanudar();
+  guardarEnSegundoPlano(payload);
+});
 
-  try {
-    const r = await apiPost(payload);
-    if (r.ok && r.duplicate) {
-      toast('Esta persona ya estaba registrada en este evento', 'warn');
-      state.count = r.count;
-    } else if (r.ok) {
-      const matchMsg = r.inscritoPrevio ? ' · inscrito previamente ✓' : ' · no estaba en la lista de inscritos';
-      toast('Registrado correctamente' + matchMsg, r.inscritoPrevio ? 'success' : 'warn');
-      state.count = r.count;
-    } else {
-      throw new Error(r.error || 'error_desconocido');
+function guardarEnSegundoPlano(payload) {
+  // Cuenta optimista: sube al toque, y se corrige sola si el guardado
+  // termina fallando o resultando duplicado.
+  state.count = (state.count || 0) + 1;
+  $('scan-counter').textContent = state.count;
+
+  apiPost(payload).then(r => {
+    if (!r.ok) throw new Error(r.error || 'error_desconocido');
+    if (r.duplicate) {
+      state.count = Math.max(0, state.count - 1);
+      $('scan-counter').textContent = state.count;
+      toast('Ya estaba registrado: ' + (payload.nombres || payload.run), 'warn');
     }
+  }).catch(() => {
+    state.count = Math.max(0, state.count - 1);
     $('scan-counter').textContent = state.count;
-  } catch (err) {
     const pending = getPending();
     pending.push(payload);
     setPending(pending);
-    toast('Sin conexión: se guardó localmente y se reintentará', 'warn');
-  } finally {
-    $('confirm-guardar').disabled = false;
-    $('confirm-guardar').textContent = 'Confirmar y guardar';
-    cerrarConfirmacionYReanudar();
-  }
-});
+    toast('Sin conexión: se guardará solo cuando vuelva la señal', 'warn');
+  });
+}
 
 // ── PWA: registrar service worker (habilita "Instalar app") ──
 if ('serviceWorker' in navigator) {
