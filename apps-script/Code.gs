@@ -65,12 +65,21 @@ function buscarInscritoPublico(evento, fecha, run, pin) {
 function cargarInscritos(payload) {
   const evento = String(payload.evento || '').trim();
   const fecha = String(payload.fechaEvento || '').trim();
-  const rows = payload.rows;
+  const rowsIn = payload.rows;
   if (!evento || !fecha) return { ok: false, error: 'evento_o_fecha_faltante' };
-  if (!Array.isArray(rows) || rows.length < 2) return { ok: false, error: 'archivo_vacio' };
+  if (!Array.isArray(rowsIn) || rowsIn.length < 2) return { ok: false, error: 'archivo_vacio' };
 
-  const headers = rows[0].map(h => String(h || '').trim());
-  if (findColBy(headers, ['rut']) === -1) return { ok: false, error: 'sin_columna_rut' };
+  // Busca la fila de encabezados entre las primeras 10, en vez de asumir
+  // que siempre es la primera — muchos Excel traen una fila de título (o
+  // filas vacías) antes de los encabezados reales, y eso hacía fallar la
+  // detección de la columna "Rut" aunque sí estuviera en el archivo.
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(10, rowsIn.length); i++) {
+    const candidata = (rowsIn[i] || []).map(h => String(h || '').trim());
+    if (findColBy(candidata, ['rut']) !== -1) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) return { ok: false, error: 'sin_columna_rut' };
+  const rows = rowsIn.slice(headerIdx);
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const tabName = inscritosTabName(evento, fecha);

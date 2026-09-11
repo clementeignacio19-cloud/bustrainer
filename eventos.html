@@ -132,7 +132,7 @@
   .field-row { display: flex; gap: 10px; }
   .field-row > div { flex: 1; }
 
-  .toast { position: fixed; top: calc(1rem + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--purple-glow); color: var(--text); padding: 10px 18px; border-radius: 30px; font-size: 13px; z-index: 100; opacity: 0; transition: opacity 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(139,92,246,0.2); }
+  .toast { position: fixed; top: calc(1rem + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--purple-glow); color: var(--text); padding: 10px 18px; border-radius: 16px; font-size: 13px; z-index: 100; opacity: 0; transition: opacity 0.25s; pointer-events: none; box-shadow: 0 4px 16px rgba(139,92,246,0.2); max-width: min(92vw, 420px); white-space: normal; text-align: center; }
   .toast.show { opacity: 1; }
   .toast.success { border-color: rgba(21,128,61,0.5); color: var(--green); }
   .toast.warn { border-color: rgba(180,83,9,0.5); color: var(--amber); }
@@ -310,7 +310,8 @@ function toast(msg, kind) {
   const t = $('toast');
   t.textContent = msg;
   t.className = 'toast show' + (kind ? ' ' + kind : '');
-  setTimeout(() => t.classList.remove('show'), 2200);
+  const duracion = Math.min(7000, Math.max(2200, msg.length * 55));
+  setTimeout(() => t.classList.remove('show'), duracion);
 }
 
 function checkConfigured() {
@@ -486,17 +487,26 @@ $('input-inscritos').addEventListener('change', async (e) => {
   try {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
+    if (!workbook.SheetNames.length) throw new Error('El archivo no tiene ninguna hoja');
     const hoja = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: '' })
       .filter(r => r.some(c => String(c).trim() !== ''));
-    if (rows.length < 2) { toast('El archivo no tiene filas de datos', 'warn'); return; }
+    if (rows.length < 2) throw new Error('El archivo no tiene filas de datos (¿está vacío, o los datos están en otra hoja del Excel?)');
 
     btn.textContent = 'Subiendo…';
     const r = await apiPost({ action: 'cargarInscritos', evento: nombre, fechaEvento: fecha, rows });
-    if (!r.ok) throw new Error(r.error || 'error_desconocido');
+    if (!r.ok) {
+      const mensajes = {
+        sin_columna_rut: 'No encontré ninguna columna con "Rut" en el título, revisando las primeras 10 filas del archivo. Revisa que esa columna exista y se llame "Rut" (o algo que contenga esa palabra).',
+        archivo_vacio: 'El archivo llegó sin filas de datos al servidor.',
+        evento_o_fecha_faltante: 'Falta el nombre o la fecha del evento.',
+        pin_invalido: 'Tu clave venció o es inválida — cierra sesión y vuelve a entrar.'
+      };
+      throw new Error(mensajes[r.error] || r.error || 'Error desconocido del servidor');
+    }
     toast(`Lista de inscritos cargada: ${r.filas} persona(s)`, 'success');
   } catch (err) {
-    toast('No se pudo cargar el archivo: revisa que sea un Excel/CSV válido', 'warn');
+    toast('No se pudo cargar: ' + (err.message || 'revisa que sea un Excel/CSV válido'), 'warn');
   } finally {
     btn.disabled = false;
     btn.textContent = '📥 Subir lista de inscritos (Excel)';
