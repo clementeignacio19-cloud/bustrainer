@@ -96,6 +96,15 @@ function cargarInscritos(payload) {
   sheet.getRange(1, 1, normalized.length, numCols).setValues(normalized);
   sheet.setFrozenRows(1);
 
+  // Registra el evento en "Eventos recientes" (índice) aunque todavía no se
+  // haya escaneado a nadie. Así aparece como tarjeta seleccionable en la
+  // app, en vez de tener que volver a teclear el nombre y la fecha exactos
+  // más tarde — un nombre escrito ligeramente distinto (mayúsculas, un
+  // espacio, etc.) apunta a otra pestaña y la lista sube pero nunca se
+  // encuentra al escanear, lo que parece un problema de lectura del Excel
+  // pero en realidad es un evento con dos nombres que no calzan.
+  registerEventInIndex(ss, evento, fecha, eventTabName(evento, fecha));
+
   return { ok: true, filas: normalized.length - 1, tab: tabName };
 }
 
