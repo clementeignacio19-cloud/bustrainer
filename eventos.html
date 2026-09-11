@@ -12,6 +12,7 @@
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' fill='%238b5cf6'/><text y='120' x='96' text-anchor='middle' font-size='80' font-family='monospace' fill='%23ffffff'>QR</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --bg: #f6f4fc;
@@ -126,6 +127,7 @@
   .confirm-photo { width: 100%; max-height: 160px; object-fit: cover; border-radius: 12px; margin-bottom: 1rem; border: 1px solid var(--border); }
   .confirm-title { font-size: 16px; font-weight: 600; margin-bottom: 1rem; color: var(--text); }
   .parse-warning { background: rgba(180,83,9,0.08); border: 1px solid rgba(180,83,9,0.3); color: var(--amber); border-radius: 10px; padding: 10px 14px; font-size: 12px; margin-bottom: 1rem; }
+  .found-notice { background: rgba(21,128,61,0.08); border: 1px solid rgba(21,128,61,0.3); color: var(--green); border-radius: 10px; padding: 10px 14px; font-size: 12px; margin-bottom: 1rem; }
   .parse-raw { font-family: var(--mono); font-size: 11px; color: var(--text); background: rgba(255,255,255,0.6); border-radius: 6px; padding: 8px; margin-top: 8px; word-break: break-all; user-select: all; }
   .field-row { display: flex; gap: 10px; }
   .field-row > div { flex: 1; }
@@ -172,6 +174,10 @@
   <input type="date" id="evento-fecha">
   <button class="btn-primary" id="evento-crear">Crear / continuar y escanear</button>
 
+  <button class="btn-secondary" id="btn-subir-inscritos">📥 Subir lista de inscritos (Excel)</button>
+  <input type="file" id="input-inscritos" accept=".xlsx,.xls,.csv" style="display:none">
+  <p class="sub" style="margin-top:0.5rem;font-size:12px">Usa el nombre y fecha de arriba. Debe tener una columna "Rut" — el resto de las columnas (nombre, correo, comuna, etc.) se detectan solas, en cualquier orden. Subir un archivo nuevo reemplaza la lista anterior de ese evento.</p>
+
   <div id="eventos-existentes-wrap">
     <div class="divider-label">Eventos recientes</div>
     <div id="eventos-lista"></div>
@@ -216,6 +222,7 @@
   <div class="confirm-sheet">
     <img class="confirm-photo" id="confirm-photo" src="" alt="Foto QR">
     <div class="confirm-title">Confirmar datos</div>
+    <div class="found-notice" id="found-notice" style="display:none">✓ Encontrado en la lista de inscritos — datos completados automáticamente. Revísalos igual antes de guardar.</div>
     <div class="parse-warning" id="parse-warning" style="display:none">
       <span id="parse-warning-text"></span>
       <div class="parse-raw" id="parse-raw"></div>
@@ -434,6 +441,46 @@ $('evento-crear').addEventListener('click', () => {
   selectEvento(nombre, fecha, 0);
 });
 
+// ── Subir lista de inscritos desde Excel/CSV ──
+$('btn-subir-inscritos').addEventListener('click', () => {
+  const nombre = $('evento-nombre').value.trim();
+  const fecha = $('evento-fecha').value;
+  if (!nombre || !fecha) { toast('Completa primero el nombre y la fecha del evento', 'warn'); return; }
+  $('input-inscritos').click();
+});
+
+$('input-inscritos').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = ''; // permite volver a elegir el mismo archivo después
+  if (!file) return;
+
+  const nombre = $('evento-nombre').value.trim();
+  const fecha = $('evento-fecha').value;
+  if (!nombre || !fecha) { toast('Completa primero el nombre y la fecha del evento', 'warn'); return; }
+
+  const btn = $('btn-subir-inscritos');
+  btn.disabled = true;
+  btn.textContent = 'Leyendo archivo…';
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const hoja = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: false, defval: '' })
+      .filter(r => r.some(c => String(c).trim() !== ''));
+    if (rows.length < 2) { toast('El archivo no tiene filas de datos', 'warn'); return; }
+
+    btn.textContent = 'Subiendo…';
+    const r = await apiPost({ action: 'cargarInscritos', evento: nombre, fechaEvento: fecha, rows });
+    if (!r.ok) throw new Error(r.error || 'error_desconocido');
+    toast(`Lista de inscritos cargada: ${r.filas} persona(s)`, 'success');
+  } catch (err) {
+    toast('No se pudo cargar el archivo: revisa que sea un Excel/CSV válido', 'warn');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📥 Subir lista de inscritos (Excel)';
+  }
+});
+
 function selectEvento(nombre, fecha, count) {
   state.evento = { nombre, fecha };
   state.count = count;
@@ -535,7 +582,40 @@ function onScanSuccess(decodedText) {
   html5QrCode.pause(true);
   const foto = capturarFoto();
   const parsed = parseCedulaChilena(decodedText);
-  abrirConfirmacion(parsed, foto);
+  procesarEscaneo(parsed, foto);
+}
+
+// ── Cruce automático con la lista de inscritos, ANTES de mostrar la
+// tarjeta de confirmación: si el RUT leído del QR coincide con alguien de
+// la lista subida para este evento, se autocompletan sus datos. ──
+async function procesarEscaneo(parsed, foto) {
+  let final = parsed;
+  if (parsed.run && state.evento) {
+    try {
+      const r = await apiGet('buscarInscrito', { run: parsed.run, evento: state.evento.nombre, fecha: state.evento.fecha });
+      if (r.ok && r.encontrado && r.inscrito) {
+        final = {
+          ...parsed,
+          nombres: r.inscrito.nombres || parsed.nombres,
+          apellidoPaterno: r.inscrito.apellidoPaterno || parsed.apellidoPaterno,
+          sexo: normalizeGeneroInscrito(r.inscrito.genero) || parsed.sexo,
+          fechaNacimiento: r.inscrito.fechaNacimiento || parsed.fechaNacimiento,
+          parseOk: true,
+          soloRun: false,
+          inscritoEncontrado: true
+        };
+      }
+    } catch (e) { /* sigue con lo que trajo el QR, sin bloquear el flujo */ }
+  }
+  abrirConfirmacion(final, foto);
+}
+
+function normalizeGeneroInscrito(g) {
+  if (!g) return '';
+  const s = g.toLowerCase();
+  if (s.indexOf('fem') !== -1) return 'Femenino';
+  if (s.indexOf('masc') !== -1) return 'Masculino';
+  return 'Otro';
 }
 
 function capturarFoto() {
@@ -620,7 +700,7 @@ $('scan-foto-precisa').addEventListener('click', async () => {
     }
     scanning = false;
     const parsed = parseCedulaChilena(resultado.decodedText);
-    abrirConfirmacion(parsed, resultado.foto);
+    procesarEscaneo(parsed, resultado.foto);
   } catch (e) {
     toast('No se pudo analizar la foto: revisa los permisos de cámara', 'warn');
     if (wasScanning) html5QrCode.resume();
@@ -746,7 +826,8 @@ function abrirConfirmacion(parsed, fotoDataUrl) {
   pendingParsed = { ...parsed, foto: fotoDataUrl };
   $('confirm-photo').src = fotoDataUrl || '';
   $('confirm-photo').style.display = fotoDataUrl ? 'block' : 'none';
-  const mostrarAviso = parsed.soloRun || !parsed.parseOk;
+  $('found-notice').style.display = parsed.inscritoEncontrado ? 'block' : 'none';
+  const mostrarAviso = !parsed.inscritoEncontrado && (parsed.soloRun || !parsed.parseOk);
   $('parse-warning').style.display = mostrarAviso ? 'block' : 'none';
   if (parsed.soloRun) {
     $('parse-warning-text').textContent = 'Este carnet solo trae el RUN en el QR (es un enlace de verificación del Registro Civil, no incluye nombre/sexo/fecha de nacimiento). Complétalos a mano — o si la persona ya estaba inscrita, se autocompletan solos al guardar.';

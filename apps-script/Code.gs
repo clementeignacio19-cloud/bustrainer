@@ -27,6 +27,7 @@ function doGet(e) {
     const action = (e.parameter.action || '').trim();
     if (action === 'init') return jsonResponse(initResponse(e.parameter.pin));
     if (action === 'list') return jsonResponse(listAsistentes(e.parameter.evento, e.parameter.fecha, e.parameter.pin));
+    if (action === 'buscarInscrito') return jsonResponse(buscarInscritoPublico(e.parameter.evento, e.parameter.fecha, e.parameter.run, e.parameter.pin));
     return jsonResponse({ ok: false, error: 'accion_invalida' });
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
@@ -37,10 +38,56 @@ function doPost(e) {
   try {
     const payload = JSON.parse(e.postData.contents);
     if (!checkPin(payload.pin)) return jsonResponse({ ok: false, error: 'pin_invalido' });
+    if (payload.action === 'cargarInscritos') return jsonResponse(cargarInscritos(payload));
     return jsonResponse(registrarAsistente(payload));
   } catch (err) {
     return jsonResponse({ ok: false, error: String(err) });
   }
+}
+
+// ── Buscar un inscrito por RUT, para autocompletar ANTES de guardar ──
+// (a diferencia de registrarAsistente, que solo enriquece al momento de
+// grabar). El frontend llama esto justo después de leer el QR.
+function buscarInscritoPublico(evento, fecha, run, pin) {
+  if (!checkPin(pin)) return { ok: false, error: 'pin_invalido' };
+  if (!evento || !fecha || !run) return { ok: false, error: 'datos_incompletos' };
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const inscrito = buscarInscrito(ss, evento, fecha, normalizeRun(run));
+  return { ok: true, encontrado: !!inscrito, inscrito: inscrito || null };
+}
+
+// ── Carga masiva de inscritos desde un Excel subido en la app ──
+// Reemplaza por completo la lista de inscritos de ese evento cada vez que
+// se sube un archivo nuevo (así no quedan filas viejas mezcladas con las
+// nuevas). "rows" es una matriz (array de arrays): la primera fila son los
+// encabezados tal cual venían en el Excel, no se exige ningún formato fijo
+// más que tener una columna con "Rut" en el título.
+function cargarInscritos(payload) {
+  const evento = String(payload.evento || '').trim();
+  const fecha = String(payload.fechaEvento || '').trim();
+  const rows = payload.rows;
+  if (!evento || !fecha) return { ok: false, error: 'evento_o_fecha_faltante' };
+  if (!Array.isArray(rows) || rows.length < 2) return { ok: false, error: 'archivo_vacio' };
+
+  const headers = rows[0].map(h => String(h || '').trim());
+  if (findColBy(headers, ['rut']) === -1) return { ok: false, error: 'sin_columna_rut' };
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const tabName = inscritosTabName(evento, fecha);
+  const existente = ss.getSheetByName(tabName);
+  if (existente) ss.deleteSheet(existente);
+
+  const sheet = ss.insertSheet(tabName);
+  const numCols = Math.max(...rows.map(r => r.length));
+  const normalized = rows.map(r => {
+    const row = r.slice(0, numCols);
+    while (row.length < numCols) row.push('');
+    return row;
+  });
+  sheet.getRange(1, 1, normalized.length, numCols).setValues(normalized);
+  sheet.setFrozenRows(1);
+
+  return { ok: true, filas: normalized.length - 1, tab: tabName };
 }
 
 function jsonResponse(obj) {
@@ -180,32 +227,53 @@ function buscarInscrito(ss, evento, fecha, run) {
 
   for (let i = 1; i < rows.length; i++) {
     if (normalizeRun(rows[i][colRut]) === run) {
-      const get = (keywords) => {
-        const idx = findColBy(headers, keywords);
+      const get = (keywords, exclude) => {
+        const idx = findColBy(headers, keywords, exclude);
         return idx === -1 ? '' : String(rows[i][idx] || '');
       };
       return {
+        nombres: get(['nombre'], ['evento']),
+        apellidoPaterno: get(['apellido']),
+        fechaNacimiento: normalizeFechaTexto(get(['nacimiento'])),
         correo: get(['correo', 'email']),
         telefono: get(['telefono', 'teléfono', 'whatsapp', 'celular', 'fono']),
         comuna: get(['comuna']),
         region: get(['region', 'región']),
         ocupacion: get(['ocupacion', 'ocupación']),
         edad: get(['edad']),
-        genero: get(['genero', 'género', 'identifica'])
+        genero: get(['genero', 'género', 'identifica'], ['evento'])
       };
     }
   }
   return null;
 }
 
-function findColBy(headers, keywords) {
+// keywords: coincide si el encabezado contiene alguna de estas palabras.
+// exclude: descarta la columna si además contiene alguna de estas (para no
+// confundir, p. ej., "Nombre" de la persona con "Nombre del evento").
+function findColBy(headers, keywords, exclude) {
   const norm = (s) => String(s || '').toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita tildes
   for (let i = 0; i < headers.length; i++) {
     const h = norm(headers[i]);
+    if (exclude && exclude.some(k => h.indexOf(norm(k)) !== -1)) continue;
     if (keywords.some(k => h.indexOf(norm(k)) !== -1)) return i;
   }
   return -1;
+}
+
+// Intenta llevar una fecha de texto libre (como viene de un Excel: puede
+// ser "12/05/1990", "1990-05-12", o ya un objeto Date de Sheets) a YYYY-MM-DD.
+function normalizeFechaTexto(value) {
+  if (!value) return '';
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  return '';
 }
 
 function countRows(sheet) {

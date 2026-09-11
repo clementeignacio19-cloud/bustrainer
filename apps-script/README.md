@@ -101,32 +101,46 @@ del PIN.
 
 ## 8. (Opcional) Cruzar con la lista de inscritos previos
 
-Si el evento ya tuvo un **Formulario de inscripción** previo (Google Forms
-con los campos nombre, edad, género, correo, teléfono, RUT, comuna, etc.),
-puedes cargar esas respuestas en la misma Sheet para que la app QR las
-cruce automáticamente por RUT al hacer el check-in — así el registro final
-queda enriquecido con correo, teléfono, comuna, región, ocupación y género
-autoidentificado, sin que el operador tenga que volver a preguntarlos.
+Como el QR de la cédula chilena moderna solo trae el RUN (ver nota más
+abajo), este cruce es lo que permite que el nombre, sexo y demás datos se
+completen solos al escanear, en vez de tener que escribirlos a mano cada
+vez — con tal de que la persona ya se haya inscrito antes al evento (por
+ejemplo, con el Formulario de inscripción: nombre, edad, género, correo,
+teléfono, RUT, comuna, etc.).
 
-1. Crea (o pega) una pestaña con el nombre exacto:
-   `Insc <Nombre del evento> <Fecha YYYY-MM-DD>`
-   Por ejemplo, para el evento "Taller Bienestar" del 23 de septiembre de
-   2026, la pestaña debe llamarse `Insc Taller Bienestar 2026-09-23`
-   (mismo nombre + fecha que uses al crear el evento en la app).
-2. Esa pestaña debe tener una fila de encabezados con al menos una columna
-   cuyo título contenga la palabra "Rut" (mayúsculas o minúsculas, no
-   importa). Las demás columnas (correo, teléfono/WhatsApp, comuna,
-   región, ocupación, edad, género) se detectan automáticamente por
-   palabras clave en el encabezado — puedes pegar tal cual la hoja de
-   respuestas que genera un Google Form con el Formulario de inscripción
-   del documento de Fundación Bienestar Mayor, sin reordenar columnas.
-3. Si no existe la pestaña `Insc ...` para un evento, la app simplemente
-   registra a todos como asistentes sin cruce (comportamiento actual, sin
-   romper nada).
-4. En cada check-in, si el RUT escaneado aparece en esa lista, la fila del
-   `Maestro` y la del evento quedan con `Inscrito Previo: Sí` y los datos
-   de inscripción anexados; si no aparece, queda `Inscrito Previo: No`
-   (asistencia igual registrada, como "walk-in").
+**Forma recomendada — subir el Excel desde la app:**
+
+1. En la app, en la pantalla "¿Qué evento vas a registrar?", completa el
+   nombre y la fecha del evento (igual que para crearlo).
+2. Toca **"📥 Subir lista de inscritos (Excel)"** y elige el archivo
+   (.xlsx, .xls o .csv) con las respuestas de inscripción.
+3. Listo — la app lo sube solo, sin tocar la Sheet a mano. Si vuelves a
+   subir un archivo para el mismo evento, reemplaza la lista anterior
+   completa (no se duplica).
+
+El único requisito del archivo es tener **una columna con "Rut" en el
+título** (mayúsculas o minúsculas, no importa) — el resto de las columnas
+(nombre, apellido, correo, teléfono/WhatsApp, comuna, región, ocupación,
+edad, género, fecha de nacimiento) se detectan solas por palabras clave en
+el encabezado, en cualquier orden, así que puedes subir tal cual el Excel
+que exporte tu Google Form u otro sistema.
+
+**Forma manual (alternativa):** también puedes seguir pegando los datos
+directo en una pestaña de la Sheet, con el nombre exacto
+`Insc <Nombre del evento> <Fecha YYYY-MM-DD>` (ej. `Insc Taller Bienestar
+2026-09-23` — mismo nombre y fecha que uses en la app), misma regla de la
+columna "Rut".
+
+**Qué pasa en cada escaneo:**
+- Si el RUN leído del QR aparece en esa lista, la app **autocompleta**
+  nombre, apellido, sexo y fecha de nacimiento (si están disponibles) antes
+  de mostrarte la tarjeta de confirmación — revisas y guardas. Además, la
+  fila del `Maestro` y la del evento quedan con `Inscrito Previo: Sí` y el
+  resto de los datos de inscripción (correo, teléfono, comuna, etc.)
+  anexados.
+- Si no aparece (o no hay lista cargada para ese evento), la app pide
+  completar los datos a mano — la persona igual queda registrada como
+  asistente ("walk-in"), con `Inscrito Previo: No`.
 
 > ¿Quieres que también arme el Formulario de inscripción (Google Form) con
 > los campos del documento de Fundación Bienestar Mayor, conectado
