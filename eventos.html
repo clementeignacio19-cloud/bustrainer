@@ -162,6 +162,10 @@
   <h1>¿Qué evento vas a registrar?</h1>
   <p class="sub">Crea uno nuevo o continúa uno que ya está en curso.</p>
 
+  <div id="evento-catalogo-wrap" style="display:none">
+    <label>Elegir de la lista</label>
+    <select id="evento-catalogo"></select>
+  </div>
   <label>Nombre del evento</label>
   <input type="text" id="evento-nombre" placeholder="Ej: Charla Liderazgo Ágil">
   <label>Fecha</label>
@@ -231,6 +235,7 @@
           <option value="">—</option>
           <option value="Masculino">Masculino</option>
           <option value="Femenino">Femenino</option>
+          <option value="Otro">Otro</option>
         </select>
       </div>
       <div><label>Fecha nacimiento</label><input type="date" id="c-fecha-nacimiento"></div>
@@ -247,6 +252,13 @@
 // (ver apps-script/README.md para cómo obtenerla)
 // ════════════════════════════════════════════════════════════
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzYSH289VUwr47nRrHsHR3pWPvJGZYNI2PGGeHW_erJr5d50P_883UP8YYjcL9WpVrS/exec";
+
+// Catálogo de nombres de evento (opcional): agrega aquí los nombres
+// oficiales cuando los tengas y aparecerán como lista seleccionable arriba
+// del campo de texto. Mientras esté vacío, esa lista queda oculta y solo
+// se usa el campo de texto libre. Ejemplo:
+// const EVENT_NAME_OPTIONS = ['Taller de Bienestar', 'Encuentro Anual'];
+const EVENT_NAME_OPTIONS = [];
 
 const LS_EVENTO = 'eventosqr_evento_actual';
 const LS_PENDING = 'eventosqr_pending';
@@ -364,8 +376,23 @@ $('cerrar-sesion').addEventListener('click', (e) => {
 function goToEventoScreen() {
   $('evento-fecha').value = todayStr();
   renderEventosLista();
+  renderCatalogoEventos();
   showScreen('screen-evento');
 }
+
+// ── Catálogo de nombres de evento (opcional) ──
+function renderCatalogoEventos() {
+  const wrap = $('evento-catalogo-wrap');
+  if (!EVENT_NAME_OPTIONS.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const sel = $('evento-catalogo');
+  sel.innerHTML = '<option value="">— Elegir de la lista o escribir abajo —</option>' +
+    EVENT_NAME_OPTIONS.map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('');
+}
+
+$('evento-catalogo').addEventListener('change', (e) => {
+  if (e.target.value) $('evento-nombre').value = e.target.value;
+});
 
 function todayStr() {
   const d = new Date();
