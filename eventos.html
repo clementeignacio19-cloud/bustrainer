@@ -237,15 +237,32 @@
     <label>Nombres</label>
     <input type="text" id="c-nombres">
     <div class="field-row">
-      <div><label>Sexo</label>
+      <div><label>Género</label>
         <select id="c-sexo">
           <option value="">—</option>
           <option value="Masculino">Masculino</option>
           <option value="Femenino">Femenino</option>
+          <option value="Prefiero no decirlo">Prefiero no decirlo</option>
           <option value="Otro">Otro</option>
         </select>
       </div>
       <div><label>Fecha nacimiento</label><input type="date" id="c-fecha-nacimiento"></div>
+    </div>
+
+    <div id="walkin-extra-fields" style="display:none">
+      <div class="divider-label">Datos de inscripción (no estaba en la lista)</div>
+      <div class="field-row">
+        <div><label>Edad</label><input type="number" id="c-edad" min="0" max="120" inputmode="numeric"></div>
+        <div><label>Comuna</label><input type="text" id="c-comuna"></div>
+      </div>
+      <label>Correo electrónico</label>
+      <input type="email" id="c-correo" autocapitalize="off">
+      <div class="field-row">
+        <div><label>Teléfono / WhatsApp</label><input type="tel" id="c-telefono"></div>
+        <div><label>Región</label><input type="text" id="c-region"></div>
+      </div>
+      <label>Ocupación principal</label>
+      <input type="text" id="c-ocupacion">
     </div>
 
     <button class="btn-primary" id="confirm-guardar">Confirmar y guardar</button>
@@ -851,6 +868,18 @@ function abrirConfirmacion(parsed, fotoDataUrl) {
   $('c-nombres').value = parsed.nombres;
   $('c-sexo').value = parsed.sexo;
   $('c-fecha-nacimiento').value = parsed.fechaNacimiento;
+
+  // Si no está en la lista de inscritos, se pide el resto de los datos del
+  // Formulario de inscripción en el momento (no solo nombre/sexo/nacimiento).
+  const esWalkin = !parsed.inscritoEncontrado;
+  $('walkin-extra-fields').style.display = esWalkin ? 'block' : 'none';
+  $('c-edad').value = '';
+  $('c-comuna').value = '';
+  $('c-correo').value = '';
+  $('c-telefono').value = '';
+  $('c-region').value = '';
+  $('c-ocupacion').value = '';
+
   $('overlay-confirm').classList.add('show');
 }
 
@@ -875,7 +904,16 @@ $('confirm-guardar').addEventListener('click', async () => {
     fechaNacimiento: $('c-fecha-nacimiento').value,
     nacionalidad: pendingParsed ? pendingParsed.nacionalidad : '',
     qrRaw: pendingParsed ? pendingParsed.qrRaw : '',
-    fotoBase64: pendingParsed ? pendingParsed.foto : ''
+    fotoBase64: pendingParsed ? pendingParsed.foto : '',
+    // Datos de inscripción capturados en el momento (walk-ins). Si la
+    // persona sí estaba en la lista de inscritos, el backend usa los datos
+    // de esa lista en vez de estos (que quedan vacíos).
+    edad: $('c-edad').value.trim(),
+    comuna: $('c-comuna').value.trim(),
+    correo: $('c-correo').value.trim(),
+    telefono: $('c-telefono').value.trim(),
+    region: $('c-region').value.trim(),
+    ocupacion: $('c-ocupacion').value.trim()
   };
 
   $('confirm-guardar').disabled = true;

@@ -138,9 +138,13 @@ columna "Rut".
   fila del `Maestro` y la del evento quedan con `Inscrito Previo: Sí` y el
   resto de los datos de inscripción (correo, teléfono, comuna, etc.)
   anexados.
-- Si no aparece (o no hay lista cargada para ese evento), la app pide
-  completar los datos a mano — la persona igual queda registrada como
-  asistente ("walk-in"), con `Inscrito Previo: No`.
+- Si no aparece (o no hay lista cargada para ese evento), la tarjeta de
+  confirmación muestra además una sección **"Datos de inscripción"** con
+  edad, comuna, correo, teléfono, región y ocupación — los mismos campos
+  del Formulario de inscripción oficial — para completar ahí mismo, en el
+  momento. Así una persona que se inscribe el mismo día del evento, o que
+  nunca llenó el formulario antes, queda con el registro completo igual,
+  sin tener que inscribirla aparte después. Queda con `Inscrito Previo: No`.
 
 > ¿Quieres que también arme el Formulario de inscripción (Google Form) con
 > los campos del documento de Fundación Bienestar Mayor, conectado

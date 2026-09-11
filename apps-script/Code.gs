@@ -175,16 +175,24 @@ function registrarAsistente(payload) {
   }
 
   const now = new Date();
+  // Si la persona no estaba en la lista de inscritos (walk-in), se usan los
+  // datos que el operador completó en el momento en la app (payload.correo,
+  // payload.comuna, etc. — la misma info que pediría el Formulario de
+  // inscripción). Si sí estaba, manda lo que ya trae la lista, no lo que
+  // haya quedado en esos campos (que la app deja vacíos en ese caso).
   const row = [
     now, evento, fechaEvento, run,
     payload.apellidoPaterno || '', payload.apellidoMaterno || '', payload.nombres || '',
     payload.fechaNacimiento || '', payload.sexo || '', payload.nacionalidad || '',
     fotoUrl, payload.qrRaw || '',
     inscrito ? 'Sí' : 'No',
-    inscrito ? inscrito.correo : '', inscrito ? inscrito.telefono : '',
-    inscrito ? inscrito.comuna : '', inscrito ? inscrito.region : '',
-    inscrito ? inscrito.ocupacion : '', inscrito ? inscrito.edad : '',
-    inscrito ? inscrito.genero : ''
+    inscrito ? inscrito.correo : (payload.correo || ''),
+    inscrito ? inscrito.telefono : (payload.telefono || ''),
+    inscrito ? inscrito.comuna : (payload.comuna || ''),
+    inscrito ? inscrito.region : (payload.region || ''),
+    inscrito ? inscrito.ocupacion : (payload.ocupacion || ''),
+    inscrito ? inscrito.edad : (payload.edad || ''),
+    inscrito ? inscrito.genero : (payload.sexo || '')
   ];
 
   eventSheet.appendRow(row);
