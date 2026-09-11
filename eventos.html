@@ -630,6 +630,7 @@ async function procesarEscaneo(parsed, foto) {
           ...parsed,
           nombres: r.inscrito.nombres || parsed.nombres,
           apellidoPaterno: r.inscrito.apellidoPaterno || parsed.apellidoPaterno,
+          apellidoMaterno: r.inscrito.apellidoMaterno || parsed.apellidoMaterno,
           sexo: normalizeGeneroInscrito(r.inscrito.genero) || parsed.sexo,
           fechaNacimiento: r.inscrito.fechaNacimiento || parsed.fechaNacimiento,
           parseOk: true,

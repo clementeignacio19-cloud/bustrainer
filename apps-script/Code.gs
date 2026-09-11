@@ -253,21 +253,30 @@ function buscarInscrito(ss, evento, fecha, run) {
 
   for (let i = 1; i < rows.length; i++) {
     if (normalizeRun(rows[i][colRut]) === run) {
+      const idxOf = (keywords, exclude) => findColBy(headers, keywords, exclude);
       const get = (keywords, exclude) => {
-        const idx = findColBy(headers, keywords, exclude);
+        const idx = idxOf(keywords, exclude);
         return idx === -1 ? '' : String(rows[i][idx] || '');
       };
+      // La fecha puede llegar como objeto Date real (Sheets convierte solo
+      // los textos con pinta de fecha al escribir la fila), así que se lee
+      // el valor crudo de la celda — sin pasarlo por String() antes — para
+      // que normalizeFechaTexto pueda distinguir ambos casos.
+      const idxNacimiento = idxOf(['nacimiento']);
+      const idxPaterno = idxOf(['apellido paterno', 'apellido']);
+      const idxMaterno = idxOf(['apellido materno']);
       return {
         nombres: get(['nombre'], ['evento']),
-        apellidoPaterno: get(['apellido']),
-        fechaNacimiento: normalizeFechaTexto(get(['nacimiento'])),
+        apellidoPaterno: idxPaterno === -1 ? '' : String(rows[i][idxPaterno] || ''),
+        apellidoMaterno: idxMaterno === -1 ? '' : String(rows[i][idxMaterno] || ''),
+        fechaNacimiento: idxNacimiento === -1 ? '' : normalizeFechaTexto(rows[i][idxNacimiento]),
         correo: get(['correo', 'email']),
         telefono: get(['telefono', 'teléfono', 'whatsapp', 'celular', 'fono']),
         comuna: get(['comuna']),
         region: get(['region', 'región']),
         ocupacion: get(['ocupacion', 'ocupación']),
         edad: get(['edad']),
-        genero: get(['genero', 'género', 'identifica'], ['evento'])
+        genero: get(['genero', 'género', 'identifica', 'sexo'], ['evento'])
       };
     }
   }
