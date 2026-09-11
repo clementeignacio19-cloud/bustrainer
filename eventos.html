@@ -376,12 +376,7 @@ $('pin-submit').addEventListener('click', async () => {
     const r = await apiGet('init');
     if (!r.ok) throw new Error(r.error || 'pin_invalido');
     state.eventos = r.eventos || [];
-    if (state.evento) {
-      const found = state.eventos.find(e => e.nombre === state.evento.nombre && e.fecha === state.evento.fecha);
-      selectEvento(state.evento.nombre, state.evento.fecha, found ? found.asistentes : 0);
-    } else {
-      goToEventoScreen();
-    }
+    goToEventoScreen(); // siempre se pasa primero por "elegir evento", nunca directo al escáner
   } catch (err) {
     $('pin-error').textContent = 'Clave incorrecta o sin conexión con el servidor.';
     $('pin-error').classList.add('show');
