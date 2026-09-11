@@ -217,7 +217,7 @@
     <img class="confirm-photo" id="confirm-photo" src="" alt="Foto QR">
     <div class="confirm-title">Confirmar datos</div>
     <div class="parse-warning" id="parse-warning" style="display:none">
-      No se pudo leer el QR con el formato esperado. Revisa y completa los datos manualmente antes de guardar.
+      <span id="parse-warning-text"></span>
       <div class="parse-raw" id="parse-raw"></div>
     </div>
 
@@ -644,8 +644,29 @@ $('scan-foto-precisa').addEventListener('click', async () => {
 function parseCedulaChilena(raw) {
   const result = {
     run: '', apellidoPaterno: '', apellidoMaterno: '', nombres: '',
-    nacionalidad: '', fechaNacimiento: '', sexo: '', qrRaw: raw, parseOk: false
+    nacionalidad: '', fechaNacimiento: '', sexo: '', qrRaw: raw, parseOk: false, soloRun: false
   };
+
+  // Las cédulas chilenas recientes traen en el QR un link de verificación
+  // del Registro Civil (portal.sidiv.registrocivil.cl), no los datos
+  // personales en texto plano. De ahí solo se puede sacar el RUN (viene
+  // como parámetro RUN= en la URL) de forma confiable — el resto de los
+  // campos (nombre, sexo, fecha nacimiento) requeriría la API oficial del
+  // Registro Civil, que no tenemos, así que quedan para completar a mano
+  // (o se autocompletan solos si el RUN está en la lista de inscritos).
+  const trimmed = raw.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const url = new URL(trimmed);
+      const runParam = url.searchParams.get('RUN') || url.searchParams.get('run');
+      if (runParam) {
+        result.run = normalizeRun(runParam);
+        result.soloRun = true;
+        result.parseOk = true;
+      }
+    } catch (e) { /* no era una URL válida, sigue con el parseo por patrones */ }
+    return result;
+  }
 
   let parts = raw.split(/[;|\t\n]+/).map(s => s.trim()).filter(Boolean);
   if (parts.length < 3) parts = raw.split(/\s{2,}/).map(s => s.trim()).filter(Boolean);
@@ -725,8 +746,14 @@ function abrirConfirmacion(parsed, fotoDataUrl) {
   pendingParsed = { ...parsed, foto: fotoDataUrl };
   $('confirm-photo').src = fotoDataUrl || '';
   $('confirm-photo').style.display = fotoDataUrl ? 'block' : 'none';
-  $('parse-warning').style.display = parsed.parseOk ? 'none' : 'block';
-  $('parse-raw').textContent = parsed.parseOk ? '' : (parsed.qrRaw || '');
+  const mostrarAviso = parsed.soloRun || !parsed.parseOk;
+  $('parse-warning').style.display = mostrarAviso ? 'block' : 'none';
+  if (parsed.soloRun) {
+    $('parse-warning-text').textContent = 'Este carnet solo trae el RUN en el QR (es un enlace de verificación del Registro Civil, no incluye nombre/sexo/fecha de nacimiento). Complétalos a mano — o si la persona ya estaba inscrita, se autocompletan solos al guardar.';
+  } else if (!parsed.parseOk) {
+    $('parse-warning-text').textContent = 'No se pudo leer el QR con el formato esperado. Revisa y completa los datos manualmente antes de guardar.';
+  }
+  $('parse-raw').textContent = mostrarAviso ? (parsed.qrRaw || '') : '';
   $('c-run').value = parsed.run;
   $('c-apellido-paterno').value = parsed.apellidoPaterno;
   $('c-apellido-materno').value = parsed.apellidoMaterno;
